@@ -70,6 +70,26 @@ export function xpForSession(wpm: number, accuracy: number, seconds: number) {
     Math.round(seconds / 3 + wpm * 0.35 + Math.max(0, accuracy - 80) * 1.5),
   );
 }
+/** Lesson score: accuracy 65%, consistency 20%, speed 15% (capped at 60 WPM). */
+export function lessonPerformance(
+  wpm: number,
+  accuracy: number,
+  consistency: number,
+) {
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        accuracy * 0.65 + consistency * 0.2 + Math.min(wpm / 60, 1) * 15,
+      ),
+    ),
+  );
+  return {
+    score,
+    stars: Math.max(1, Math.min(6, Math.ceil(score / (100 / 6)))),
+  };
+}
 export function levelFromXp(xp: number) {
   let level = 1,
     spent = 0;

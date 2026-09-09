@@ -37,6 +37,7 @@ import {
   detectWeakKeys,
   KeyPerformance,
   levelFromXp,
+  lessonPerformance,
   xpForSession,
 } from '@/lib/typing/metrics';
 type View =
@@ -68,6 +69,7 @@ type Saved = {
   xp: number;
   completedLessons: number[];
   lessonStars: Record<number, number>;
+  lessonScores: Record<number, number>;
   dailyGoal: number;
   theme: 'light' | 'dark';
 };
@@ -76,6 +78,7 @@ const empty: Saved = {
   xp: 0,
   completedLessons: [],
   lessonStars: {},
+  lessonScores: {},
   dailyGoal: 10,
   theme: 'light',
 };
@@ -624,7 +627,12 @@ function Result({
   lessonMode?: boolean;
 }) {
   const weak = detectWeakKeys(session.keyStats);
-  const stars = session.accuracy >= 97 ? 3 : session.accuracy >= 90 ? 2 : 1;
+  const consistency = calculateMetrics('', '', 1, session.samples).consistency;
+  const { stars, score } = lessonPerformance(
+    session.wpm,
+    session.accuracy,
+    consistency,
+  );
   return (
     <section className="result-page">
       <span className="eyebrow">
@@ -633,22 +641,31 @@ function Result({
       {lessonMode && (
         <div
           className="lesson-stars"
-          aria-label={`${stars} out of 3 stars earned`}
+          aria-label={`${stars} out of 6 stars earned with a score of ${score}`}
         >
-          {[1, 2, 3].map((star) => (
-            <Star
-              key={star}
-              className={star <= stars ? 'earned' : ''}
-              fill={star <= stars ? 'currentColor' : 'none'}
-              style={{ animationDelay: `${star * 180}ms` }}
-            />
-          ))}
+          <div className="score-seal">
+            <b>{score}</b>
+            <span>score</span>
+          </div>
+          <div className="star-row">
+            {[1, 2, 3, 4, 5, 6].map((star) => (
+              <Star
+                key={star}
+                className={star <= stars ? 'earned' : ''}
+                fill={star <= stars ? 'currentColor' : 'none'}
+                style={{ animationDelay: `${star * 180}ms` }}
+              />
+            ))}
+          </div>
           <strong>
-            {stars === 3
-              ? 'Mastered'
-              : stars === 2
-                ? 'Great progress'
-                : 'Lesson complete'}
+            {stars === 6
+              ? 'Exceptional control'
+              : stars >= 4
+                ? 'Strong performance'
+                : stars >= 2
+                  ? 'Good progress'
+                  : 'Lesson complete'}{' '}
+            · {stars}/6 stars
           </strong>
         </div>
       )}
@@ -672,10 +689,7 @@ function Result({
           label={lessonMode ? 'Average speed' : 'Raw speed'}
           value={`${lessonMode ? session.wpm : session.rawWpm} wpm`}
         />
-        <Stat
-          label="Consistency"
-          value={`${calculateMetrics('', '', 1, session.samples).consistency}%`}
-        />
+        <Stat label="Consistency" value={`${consistency}%`} />
         <Stat label="Errors" value={session.errors} />
         <Stat label="Duration" value={`${session.duration}s`} />
         <Stat label="XP earned" value={`+${session.xp}`} />
@@ -1095,7 +1109,22 @@ function Learn({
                   ...s.lessonStars,
                   [l.id]: Math.max(
                     s.lessonStars[l.id] || 0,
-                    session.accuracy >= 97 ? 3 : session.accuracy >= 90 ? 2 : 1,
+                    lessonPerformance(
+                      session.wpm,
+                      session.accuracy,
+                      calculateMetrics('', '', 1, session.samples).consistency,
+                    ).stars,
+                  ),
+                },
+                lessonScores: {
+                  ...s.lessonScores,
+                  [l.id]: Math.max(
+                    s.lessonScores[l.id] || 0,
+                    lessonPerformance(
+                      session.wpm,
+                      session.accuracy,
+                      calculateMetrics('', '', 1, session.samples).consistency,
+                    ).score,
                   ),
                 },
               }))
@@ -1154,7 +1183,8 @@ function Learn({
                 {saved.lessonStars[l.id] > 0 && (
                   <strong className="course-stars">
                     {'★'.repeat(saved.lessonStars[l.id])}
-                    {'☆'.repeat(3 - saved.lessonStars[l.id])}
+                    {'☆'.repeat(6 - saved.lessonStars[l.id])}
+                    <small>{saved.lessonScores[l.id]} pts</small>
                   </strong>
                 )}
               </span>

@@ -5,6 +5,7 @@ import {
   calculateStreak,
   detectWeakKeys,
   levelFromXp,
+  lessonPerformance,
   xpForSession,
 } from '../lib/typing/metrics.ts';
 test('uses five correct characters per word', () =>
@@ -32,3 +33,7 @@ test('streak counts consecutive dates', () =>
     ),
     3,
   ));
+test('lesson performance produces a score and six-star maximum', () => {
+  assert.deepEqual(lessonPerformance(60, 100, 100), { score: 100, stars: 6 });
+  assert.equal(lessonPerformance(15, 80, 70).stars >= 1, true);
+});
