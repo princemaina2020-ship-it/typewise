@@ -370,11 +370,13 @@ function TypingSession({
   best = 0,
   customText,
   modeName = '30 second test',
+  lessonMode = false,
 }: {
   onFinish: (s: Session) => void;
   best?: number;
   customText?: string;
   modeName?: string;
+  lessonMode?: boolean;
 }) {
   const [duration, setDuration] = useState(30),
     [text, setText] = useState(customText || passages[0]),
@@ -460,19 +462,28 @@ function TypingSession({
           ))}
         </div>
       </div>
-      <div className="live-stats">
+      <div className={`live-stats ${lessonMode ? 'lesson-counter' : ''}`}>
         <div>
           <b>{remaining}</b>
           <span>seconds</span>
         </div>
-        <div>
-          <b>{metrics.wpm}</b>
-          <span>wpm</span>
-        </div>
-        <div>
-          <b>{metrics.accuracy}%</b>
-          <span>accuracy</span>
-        </div>
+        {!lessonMode && (
+          <>
+            <div>
+              <b>{metrics.wpm}</b>
+              <span>wpm</span>
+            </div>
+            <div>
+              <b>{metrics.accuracy}%</b>
+              <span>accuracy</span>
+            </div>
+          </>
+        )}
+        {lessonMode && (
+          <button className="lesson-restart" onClick={reset}>
+            <RotateCcw size={16} /> Restart lesson
+          </button>
+        )}
       </div>
       <button className="typing-area" onClick={() => input.current?.focus()}>
         {text.split('').map((c, i) => (
@@ -534,9 +545,11 @@ function TypingSession({
       <VirtualKeyboard next={text[typed.length] || ''} />
       <div className="type-hint">
         <span>Click above, then type. Backspace is welcome.</span>
-        <button onClick={reset}>
-          <RotateCcw size={14} /> restart
-        </button>
+        {!lessonMode && (
+          <button onClick={reset}>
+            <RotateCcw size={14} /> restart
+          </button>
+        )}
       </div>
     </section>
   );
@@ -955,6 +968,18 @@ function Learn({
             </b>
           </div>
           <div className="lesson-focus-actions">
+            <button
+              className="theme-button"
+              aria-label="Toggle dark mode"
+              onClick={() =>
+                setSaved((s) => ({
+                  ...s,
+                  theme: s.theme === 'dark' ? 'light' : 'dark',
+                }))
+              }
+            >
+              {saved.theme === 'dark' ? <Sun /> : <Moon />}
+            </button>
             <button className="pill ghost" onClick={() => setActive(null)}>
               Back to course
             </button>
@@ -986,6 +1011,7 @@ function Learn({
           <TypingSession
             customText={l.exercise}
             modeName={`Lesson ${l.id}`}
+            lessonMode
             best={0}
             onFinish={(session) =>
               setSaved((s) => ({

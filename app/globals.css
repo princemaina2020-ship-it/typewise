@@ -1186,6 +1186,28 @@ button {
   min-height: 220px;
   padding-top: 38px;
 }
+.lesson-counter {
+  justify-content: space-between;
+  align-items: center;
+}
+.lesson-counter > div b {
+  font-size: 42px;
+  color: var(--accent);
+}
+.lesson-restart {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 99px;
+  padding: 11px 17px;
+  font-weight: 700;
+}
+.lesson-restart:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 @media (max-width: 620px) {
   .lesson-focus-header {
     grid-template-columns: 1fr auto;
