@@ -70,24 +70,69 @@ export function xpForSession(wpm: number, accuracy: number, seconds: number) {
     Math.round(seconds / 3 + wpm * 0.35 + Math.max(0, accuracy - 80) * 1.5),
   );
 }
-/** Lesson score: accuracy 65%, consistency 20%, speed 15% (capped at 60 WPM). */
+/**
+ * Competitive lesson score. Accuracy strongly gates speed, while consistency
+ * rewards controlled rhythm: WPM × 100 × accuracy × (0.75 + consistency / 400).
+ */
 export function lessonPerformance(
   wpm: number,
   accuracy: number,
   consistency: number,
 ) {
+  // Scores remain comparable even when a browser or input method emits an
+  // impossible burst of characters in a single event.
+  const verifiedWpm = Math.min(Math.max(wpm, 0), 150);
   const score = Math.max(
     0,
-    Math.min(
-      100,
-      Math.round(
-        accuracy * 0.65 + consistency * 0.2 + Math.min(wpm / 60, 1) * 15,
-      ),
+    Math.round(
+      verifiedWpm * 100 * (accuracy / 100) * (0.75 + consistency / 400),
     ),
   );
   return {
     score,
-    stars: Math.max(1, Math.min(6, Math.ceil(score / (100 / 6)))),
+    stars: Math.max(1, Math.min(6, Math.ceil(score / 1500))),
+  };
+}
+export type LessonRecordData = {
+  attempts: number;
+  bestScore: number;
+  bestWpm: number;
+  bestAccuracy: number;
+  bestConsistency: number;
+  bestDuration: number;
+  lastScore: number;
+  lastWpm: number;
+  lastAccuracy: number;
+  lastDuration: number;
+};
+
+export function updateLessonRecord(
+  previous: LessonRecordData | undefined,
+  current: {
+    score: number;
+    wpm: number;
+    accuracy: number;
+    consistency: number;
+    duration: number;
+  },
+) {
+  const isRecord = current.score > (previous?.bestScore || 0);
+  return {
+    isRecord,
+    record: {
+      attempts: (previous?.attempts || 0) + 1,
+      bestScore: isRecord ? current.score : previous?.bestScore || 0,
+      bestWpm: isRecord ? current.wpm : previous?.bestWpm || 0,
+      bestAccuracy: isRecord ? current.accuracy : previous?.bestAccuracy || 0,
+      bestConsistency: isRecord
+        ? current.consistency
+        : previous?.bestConsistency || 0,
+      bestDuration: isRecord ? current.duration : previous?.bestDuration || 0,
+      lastScore: current.score,
+      lastWpm: current.wpm,
+      lastAccuracy: current.accuracy,
+      lastDuration: current.duration,
+    },
   };
 }
 export function levelFromXp(xp: number) {

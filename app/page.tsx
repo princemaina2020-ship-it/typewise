@@ -2,12 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity,
+  ArrowLeft,
   Award,
   BarChart3,
   BookOpen,
   Brain,
   ChevronRight,
   Gauge,
+  Hand,
   Home,
   Keyboard,
   Moon,
@@ -21,16 +23,15 @@ import {
   Target,
   Trophy,
   User,
+  Volume2,
+  VolumeX,
   Zap,
 } from 'lucide-react';
+import { BRAND, fingerForKey, keyRows, lessons, passages } from '@/lib/data';
 import {
-  achievements,
-  BRAND,
-  fingerForKey,
-  keyRows,
-  lessons,
-  passages,
-} from '@/lib/data';
+  evaluateAchievements,
+  type AchievementProgress,
+} from '@/lib/achievements';
 import {
   calculateMetrics,
   calculateStreak,
@@ -38,6 +39,8 @@ import {
   KeyPerformance,
   levelFromXp,
   lessonPerformance,
+  updateLessonRecord,
+  type LessonRecordData,
   xpForSession,
 } from '@/lib/typing/metrics';
 type View =
@@ -64,12 +67,16 @@ type Session = {
   samples: number[];
   keyStats: KeyPerformance;
 };
+type LessonRecord = LessonRecordData;
 type Saved = {
   sessions: Session[];
   xp: number;
   completedLessons: number[];
   lessonStars: Record<number, number>;
   lessonScores: Record<number, number>;
+  lessonRecords: Record<number, LessonRecord>;
+  recordBreaks: number;
+  unlockedAchievements: Record<string, string>;
   dailyGoal: number;
   theme: 'light' | 'dark';
 };
@@ -79,6 +86,9 @@ const empty: Saved = {
   completedLessons: [],
   lessonStars: {},
   lessonScores: {},
+  lessonRecords: {},
+  recordBreaks: 0,
+  unlockedAchievements: {},
   dailyGoal: 10,
   theme: 'light',
 };
@@ -96,6 +106,35 @@ function useSaved() {
     if (ready) localStorage.setItem('typewise-progress', JSON.stringify(data));
   }, [data, ready]);
   return [data, setData] as const;
+}
+function achievementSnapshot(
+  saved: Saved,
+  session?: Session,
+  lessonId?: number,
+  newRecord = false,
+) {
+  const sessions = session ? [session, ...saved.sessions] : saved.sessions;
+  const completed =
+    lessonId && !saved.completedLessons.includes(lessonId)
+      ? [...saved.completedLessons, lessonId]
+      : saved.completedLessons;
+  return {
+    sessions,
+    completedLessons: completed,
+    streak: calculateStreak(sessions.map((s) => s.date.slice(0, 10))),
+    recordBreaks: saved.recordBreaks + (newRecord ? 1 : 0),
+    bestLessonScore: Math.max(
+      0,
+      ...Object.values(saved.lessonRecords).map((r) => r.bestScore),
+      session?.mode.startsWith('Lesson')
+        ? lessonPerformance(
+            session.wpm,
+            session.accuracy,
+            calculateMetrics('', '', 1, session.samples).consistency,
+          ).score
+        : 0,
+    ),
+  };
 }
 const nav = [
   ['dashboard', 'Overview', Home],
@@ -121,11 +160,22 @@ export default function App() {
     scrollTo({ top: 0, behavior: 'smooth' });
   };
   const finish = (x: Session) =>
-    setSaved((s) => ({
-      ...s,
-      sessions: [x, ...s.sessions].slice(0, 250),
-      xp: s.xp + x.xp,
-    }));
+    setSaved((s) => {
+      const badges = evaluateAchievements(achievementSnapshot(s, x)).filter(
+        (a) => a.unlocked && !s.unlockedAchievements[a.id],
+      );
+      return {
+        ...s,
+        sessions: [x, ...s.sessions].slice(0, 250),
+        xp: s.xp + x.xp + badges.reduce((sum, a) => sum + a.xp, 0),
+        unlockedAchievements: {
+          ...s.unlockedAchievements,
+          ...Object.fromEntries(
+            badges.map((a) => [a.id, new Date().toISOString()]),
+          ),
+        },
+      };
+    });
   if (view === 'home')
     return <Landing start={() => go('test')} explore={() => go('dashboard')} />;
   return (
@@ -159,7 +209,7 @@ export default function App() {
           </small>
         </div>
       </aside>
-      <main className="main">
+      <main className={`main page-surface page-${view}`}>
         <header className="topbar">
           <div className="mobile-brand">
             <Logo />
@@ -377,12 +427,22 @@ function TypingSession({
   customText,
   modeName = '30 second test',
   lessonMode = false,
+  lessonTitle,
+  lessonRecord,
+  onNext,
+  onPractice,
+  completionBadges,
 }: {
   onFinish: (s: Session) => void;
   best?: number;
   customText?: string;
   modeName?: string;
   lessonMode?: boolean;
+  lessonTitle?: string;
+  lessonRecord?: LessonRecord;
+  onNext?: () => void;
+  onPractice?: () => void;
+  completionBadges?: (session: Session) => AchievementProgress[];
 }) {
   const [duration, setDuration] = useState(30),
     [text, setText] = useState(customText || passages[0]),
@@ -390,10 +450,19 @@ function TypingSession({
     [started, setStarted] = useState<number | null>(null),
     [now, setNow] = useState(() => Date.now()),
     [result, setResult] = useState<Session | null>(null),
-    [samples, setSamples] = useState<number[]>([]);
+    [samples, setSamples] = useState<number[]>([]),
+    [armed, setArmed] = useState(!lessonMode),
+    [showKeyboard, setShowKeyboard] = useState(true),
+    [showFingers, setShowFingers] = useState(true),
+    [sound, setSound] = useState(false),
+    [badges, setBadges] = useState<AchievementProgress[]>([]),
+    [baselineRecord, setBaselineRecord] = useState<LessonRecord | undefined>(
+      lessonRecord,
+    );
   const keys = useRef<KeyPerformance>({}),
     last = useRef<number>(0),
-    input = useRef<HTMLInputElement>(null);
+    input = useRef<HTMLInputElement>(null),
+    audioContext = useRef<AudioContext | null>(null);
   const elapsed = started
       ? lessonMode
         ? now - started
@@ -422,10 +491,13 @@ function TypingSession({
         rawWpm: final.rawWpm,
         accuracy: final.accuracy,
         errors: final.errors,
-        duration: Math.round(
-          (lessonMode
-            ? Date.now() - started
-            : Math.min(duration * 1000, Date.now() - started)) / 1000,
+        duration: Math.max(
+          1,
+          Math.round(
+            (lessonMode
+              ? Date.now() - started
+              : Math.min(duration * 1000, Date.now() - started)) / 1000,
+          ),
         ),
         xp: xpForSession(
           final.wpm,
@@ -435,6 +507,7 @@ function TypingSession({
         samples,
         keyStats: keys.current,
       };
+    setBadges(completionBadges?.(session) || []);
     setResult(session);
     onFinish(session);
   }, [
@@ -447,6 +520,7 @@ function TypingSession({
     onFinish,
     modeName,
     lessonMode,
+    completionBadges,
   ]);
   useEffect(() => {
     if (!started || result) return;
@@ -464,6 +538,9 @@ function TypingSession({
     setStarted(null);
     setResult(null);
     setSamples([]);
+    setArmed(!lessonMode);
+    setBadges([]);
+    setBaselineRecord(lessonRecord);
     keys.current = {};
     setText(
       customText || passages[Math.floor(Math.random() * passages.length)],
@@ -477,7 +554,34 @@ function TypingSession({
         best={best}
         retry={reset}
         lessonMode={lessonMode}
+        lessonTitle={lessonTitle}
+        lessonRecord={baselineRecord}
+        badges={badges}
+        onNext={onNext}
+        onPractice={onPractice}
       />
+    );
+  if (lessonMode && !armed)
+    return (
+      <section className="lesson-start">
+        <span className="kicker">READY WHEN YOU ARE</span>
+        <h2>{lessonTitle}</h2>
+        <p>
+          Settle your hands on the home row. The exercise begins on your first
+          key after you press start.
+        </p>
+        <div className="start-preview">{text}</div>
+        <button
+          className="start-lesson-button"
+          onClick={() => {
+            setArmed(true);
+            setTimeout(() => input.current?.focus(), 180);
+          }}
+        >
+          <Play size={17} fill="currentColor" /> Start lesson
+        </button>
+        <small>No timer. Begin when you feel ready.</small>
+      </section>
     );
   return (
     <section className="typing-page">
@@ -519,10 +623,46 @@ function TypingSession({
       )}
       {lessonMode && (
         <div className="lesson-toolbar">
-          <span>Type the exercise at your own pace.</span>
-          <button className="lesson-restart" onClick={reset}>
-            <RotateCcw size={16} /> Restart lesson
-          </button>
+          <div className="lesson-live">
+            <span>
+              <b>{metrics.wpm}</b> WPM
+            </span>
+            <span>
+              <b>{metrics.accuracy}%</b> accuracy
+            </span>
+            <span>
+              <b>{Math.round((typed.length / text.length) * 100)}%</b> progress
+            </span>
+          </div>
+          <div className="lesson-tools">
+            <button className="lesson-restart" onClick={reset}>
+              <RotateCcw size={16} /> Restart lesson
+            </button>
+            <button
+              className={showKeyboard ? 'is-on' : ''}
+              onClick={() => setShowKeyboard((v) => !v)}
+              title="Toggle keyboard"
+              aria-label="Toggle visual keyboard"
+            >
+              <Keyboard size={16} />
+            </button>
+            <button
+              className={showFingers ? 'is-on' : ''}
+              onClick={() => setShowFingers((v) => !v)}
+              title="Toggle finger guide"
+              aria-label="Toggle finger guide"
+            >
+              <Hand size={16} />
+            </button>
+            <button
+              className={sound ? 'is-on' : ''}
+              onClick={() => setSound((v) => !v)}
+              title="Toggle typing sound"
+              aria-label="Toggle typing sound"
+            >
+              {sound ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+          </div>
         </div>
       )}
       <button className="typing-area" onClick={() => input.current?.focus()}>
@@ -547,6 +687,9 @@ function TypingSession({
         ref={input}
         className="sr-input"
         value={typed}
+        onPaste={(event) => {
+          if (lessonMode) event.preventDefault();
+        }}
         onChange={(e) => {
           const val = e.target.value.slice(0, text.length);
           if (!started) {
@@ -568,6 +711,24 @@ function TypingSession({
               correct: p.correct + (val[i] === text[i] ? 1 : 0),
               totalResponseMs: p.totalResponseMs + delta,
             };
+            if (sound) {
+              try {
+                const context = audioContext.current || new AudioContext();
+                audioContext.current = context;
+                const oscillator = context.createOscillator(),
+                  gain = context.createGain();
+                oscillator.frequency.value = val[i] === text[i] ? 520 : 170;
+                gain.gain.setValueAtTime(0.025, context.currentTime);
+                gain.gain.exponentialRampToValueAtTime(
+                  0.001,
+                  context.currentTime + 0.035,
+                );
+                oscillator.connect(gain);
+                gain.connect(context.destination);
+                oscillator.start();
+                oscillator.stop(context.currentTime + 0.04);
+              } catch {}
+            }
             last.current = Date.now();
             if (i % 5 === 0 && started)
               setSamples((s) => [
@@ -582,7 +743,10 @@ function TypingSession({
         }}
         spellCheck={false}
       />
-      <VirtualKeyboard next={text[typed.length] || ''} />
+      {showKeyboard && <VirtualKeyboard next={text[typed.length] || ''} />}
+      {lessonMode && showFingers && (
+        <FingerGuide next={text[typed.length] || ''} />
+      )}
       <div className="type-hint">
         <span>Click above, then type. Backspace is welcome.</span>
         {!lessonMode && (
@@ -596,17 +760,28 @@ function TypingSession({
 }
 function VirtualKeyboard({ next }: { next: string }) {
   const n = next === ' ' ? 'SPACE' : next.toUpperCase();
+  const rows = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'BACKSPACE'],
+    ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', 'ENTER'],
+    ['SHIFT', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', 'SHIFT'],
+    ['SPACE'],
+  ];
   return (
-    <div className="keyboard">
-      {keyRows.map((row, i) => (
+    <div className="keyboard" aria-label="Visual QWERTY keyboard">
+      {rows.map((row, i) => (
         <div className="key-row" key={i}>
-          {row.map((k) => (
+          {row.map((k, index) => (
             <kbd
-              key={k}
-              className={k === n ? 'next' : ''}
+              key={`${k}-${index}`}
+              className={`${k === n ? 'next' : ''} ${['SHIFT', 'ENTER', 'BACKSPACE'].includes(k) ? 'key-wide' : ''}`}
               title={fingerForKey[k]}
             >
-              {k === 'SPACE' ? '' : k}
+              {k === 'SPACE'
+                ? ''
+                : k === 'BACKSPACE'
+                  ? 'delete'
+                  : k.toLowerCase()}
               <small>{k === n ? fingerForKey[k] : ''}</small>
             </kbd>
           ))}
@@ -615,16 +790,62 @@ function VirtualKeyboard({ next }: { next: string }) {
     </div>
   );
 }
+function FingerGuide({ next }: { next: string }) {
+  const normalized = next === ' ' ? 'SPACE' : next.toUpperCase(),
+    active = fingerForKey[normalized] || '';
+  const fingers = [
+    'L pinky',
+    'L ring',
+    'L middle',
+    'L index',
+    'Thumbs',
+    'R index',
+    'R middle',
+    'R ring',
+    'R pinky',
+  ];
+  return (
+    <div
+      className="finger-guide"
+      aria-label={`Use ${active || 'the indicated finger'}`}
+    >
+      <span className="finger-caption">
+        Finger guide <b>{active || 'Get ready'}</b>
+      </span>
+      <div className="finger-map">
+        {fingers.map((finger, i) => (
+          <div
+            key={finger}
+            className={`${active === finger ? 'active' : ''} finger-${i}`}
+          >
+            <i />
+            <small>{finger.replace('L ', '').replace('R ', '')}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 function Result({
   session,
   best,
   retry,
   lessonMode = false,
+  lessonTitle,
+  lessonRecord,
+  badges = [],
+  onNext,
+  onPractice,
 }: {
   session: Session;
   best: number;
   retry: () => void;
   lessonMode?: boolean;
+  lessonTitle?: string;
+  lessonRecord?: LessonRecord;
+  badges?: AchievementProgress[];
+  onNext?: () => void;
+  onPractice?: () => void;
 }) {
   const weak = detectWeakKeys(session.keyStats);
   const consistency = calculateMetrics('', '', 1, session.samples).consistency;
@@ -633,10 +854,21 @@ function Result({
     session.accuracy,
     consistency,
   );
+  const isHighScore = lessonMode && score > (lessonRecord?.bestScore || 0),
+    previousBest = lessonRecord?.bestScore || 0;
+  const characterCount = Object.values(session.keyStats).reduce(
+      (a, k) => a + k.presses,
+      0,
+    ),
+    correctCharacters = Object.values(session.keyStats).reduce(
+      (a, k) => a + k.correct,
+      0,
+    );
   return (
     <section className="result-page">
       <span className="eyebrow">
-        <Sparkles size={14} /> Session complete
+        <Sparkles size={14} />{' '}
+        {lessonMode ? 'Lesson complete' : 'Session complete'}
       </span>
       {lessonMode && (
         <div
@@ -670,9 +902,11 @@ function Result({
         </div>
       )}
       <h1>
-        {session.wpm > best && best > 0
-          ? 'A new personal best.'
-          : 'That was a solid step.'}
+        {lessonMode
+          ? lessonTitle
+          : session.wpm > best && best > 0
+            ? 'A new personal best.'
+            : 'That was a solid step.'}
       </h1>
       <div className="result-hero">
         <div>
@@ -684,6 +918,34 @@ function Result({
           <span>accuracy</span>
         </div>
       </div>
+      {lessonMode && (
+        <div className={`high-score-panel ${isHighScore ? 'new-record' : ''}`}>
+          <div>
+            <span>{isHighScore ? 'NEW HIGH SCORE' : 'LESSON SCORE'}</span>
+            <b>{score.toLocaleString()}</b>
+          </div>
+          <dl>
+            <div>
+              <dt>Previous best</dt>
+              <dd>
+                {previousBest ? previousBest.toLocaleString() : 'First attempt'}
+              </dd>
+            </div>
+            <div>
+              <dt>Difference</dt>
+              <dd className={score >= previousBest ? 'positive' : ''}>
+                {previousBest
+                  ? `${score - previousBest >= 0 ? '+' : ''}${(score - previousBest).toLocaleString()}`
+                  : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt>Attempts</dt>
+              <dd>{(lessonRecord?.attempts || 0) + 1}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
       <div className="metric-grid">
         <Stat
           label={lessonMode ? 'Average speed' : 'Raw speed'}
@@ -693,7 +955,46 @@ function Result({
         <Stat label="Errors" value={session.errors} />
         <Stat label="Duration" value={`${session.duration}s`} />
         <Stat label="XP earned" value={`+${session.xp}`} />
+        {lessonMode && (
+          <>
+            <Stat label="Correct characters" value={correctCharacters} />
+            <Stat label="Characters" value={characterCount} />
+          </>
+        )}
       </div>
+      {lessonMode && lessonRecord && (
+        <div className="comparison">
+          <div className="comparison-head">
+            <span>Performance comparison</span>
+            <span>This run</span>
+            <span>Personal best</span>
+          </div>
+          <div>
+            <b>WPM</b>
+            <span>{session.wpm}</span>
+            <span>{Math.max(session.wpm, lessonRecord.bestWpm)}</span>
+          </div>
+          <div>
+            <b>Accuracy</b>
+            <span>{session.accuracy}%</span>
+            <span>
+              {Math.max(session.accuracy, lessonRecord.bestAccuracy)}%
+            </span>
+          </div>
+          <div>
+            <b>Score</b>
+            <span>{score.toLocaleString()}</span>
+            <span>
+              {Math.max(score, lessonRecord.bestScore).toLocaleString()}
+            </span>
+          </div>
+          <div>
+            <b>Time</b>
+            <span>{session.duration}s</span>
+            <span>{lessonRecord.bestDuration}s</span>
+          </div>
+        </div>
+      )}
       <div className="analysis">
         <div>
           <span className="kicker">
@@ -719,21 +1020,53 @@ function Result({
           ))}
         </div>
       </div>
+      {lessonMode && badges.length > 0 && (
+        <div className="result-achievements">
+          <span className="kicker">
+            ACHIEVEMENT{badges.length > 1 ? 'S' : ''} UNLOCKED
+          </span>
+          {badges.map((badge, i) => (
+            <div key={badge.id} style={{ animationDelay: `${i * 140}ms` }}>
+              <Award />
+              <span>
+                <b>{badge.name}</b>
+                <small>{badge.description}</small>
+              </span>
+              <strong>+{badge.xp} XP</strong>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="result-actions">
-        <button className="pill primary" onClick={retry}>
+        {lessonMode && onNext && (
+          <button className="pill primary" onClick={onNext}>
+            Next lesson <ChevronRight size={15} />
+          </button>
+        )}
+        <button
+          className={lessonMode ? 'pill secondary' : 'pill primary'}
+          onClick={retry}
+        >
           <RotateCcw size={15} />{' '}
           {session.mode.startsWith('Lesson') ? 'Retake lesson' : 'Try again'}
         </button>
-        <button
-          className="pill ghost"
-          onClick={() =>
-            navigator.clipboard?.writeText(
-              `I typed ${session.wpm} WPM at ${session.accuracy}% accuracy on Typewise.`,
-            )
-          }
-        >
-          Share result
-        </button>
+        {lessonMode && onPractice && (
+          <button className="pill ghost" onClick={onPractice}>
+            Practice weak keys
+          </button>
+        )}
+        {!lessonMode && (
+          <button
+            className="pill ghost"
+            onClick={() =>
+              navigator.clipboard?.writeText(
+                `I typed ${session.wpm} WPM at ${session.accuracy}% accuracy on Typewise.`,
+              )
+            }
+          >
+            Share result
+          </button>
+        )}
       </div>
     </section>
   );
@@ -1034,19 +1367,105 @@ function Learn({
 }) {
   const [q, setQ] = useState(''),
     [active, setActive] = useState<number | null>(null);
+  const newBadgesFor = (lessonId: number, session: Session) => {
+    const consistency = calculateMetrics(
+        '',
+        '',
+        1,
+        session.samples,
+      ).consistency,
+      score = lessonPerformance(
+        session.wpm,
+        session.accuracy,
+        consistency,
+      ).score,
+      isRecord = score > (saved.lessonRecords[lessonId]?.bestScore || 0);
+    return evaluateAchievements(
+      achievementSnapshot(saved, session, lessonId, isRecord),
+    ).filter((a) => a.unlocked && !saved.unlockedAchievements[a.id]);
+  };
+  const saveLesson = (lessonId: number, reward: number, session: Session) =>
+    setSaved((s) => {
+      const consistency = calculateMetrics(
+          '',
+          '',
+          1,
+          session.samples,
+        ).consistency,
+        performance = lessonPerformance(
+          session.wpm,
+          session.accuracy,
+          consistency,
+        ),
+        previous = s.lessonRecords[lessonId],
+        recordUpdate = updateLessonRecord(previous, {
+          score: performance.score,
+          wpm: session.wpm,
+          accuracy: session.accuracy,
+          consistency,
+          duration: session.duration,
+        }),
+        isRecord = recordUpdate.isRecord,
+        badges = evaluateAchievements(
+          achievementSnapshot(s, session, lessonId, isRecord),
+        ).filter((a) => a.unlocked && !s.unlockedAchievements[a.id]);
+      return {
+        ...s,
+        sessions: [session, ...s.sessions].slice(0, 250),
+        xp:
+          s.xp +
+          session.xp +
+          (s.completedLessons.includes(lessonId) ? 0 : reward) +
+          badges.reduce((sum, a) => sum + a.xp, 0),
+        completedLessons: s.completedLessons.includes(lessonId)
+          ? s.completedLessons
+          : [...s.completedLessons, lessonId],
+        lessonStars: {
+          ...s.lessonStars,
+          [lessonId]: Math.max(s.lessonStars[lessonId] || 0, performance.stars),
+        },
+        lessonScores: {
+          ...s.lessonScores,
+          [lessonId]: Math.max(
+            s.lessonScores[lessonId] || 0,
+            performance.score,
+          ),
+        },
+        lessonRecords: { ...s.lessonRecords, [lessonId]: recordUpdate.record },
+        recordBreaks: s.recordBreaks + (isRecord ? 1 : 0),
+        unlockedAchievements: {
+          ...s.unlockedAchievements,
+          ...Object.fromEntries(
+            badges.map((a) => [a.id, new Date().toISOString()]),
+          ),
+        },
+      };
+    });
   if (active) {
     const l = lessons[active - 1];
     return (
       <section className="lesson-focus">
         <header className="lesson-focus-header">
-          <button className="brand" onClick={() => go('dashboard')}>
-            <Logo /> <span>{BRAND.name}</span>
+          <button
+            className="lesson-back"
+            onClick={() => setActive(null)}
+            title="Back to course"
+          >
+            <ArrowLeft size={18} /> <span>Course</span>
           </button>
           <div className="lesson-breadcrumb">
             <span>{l.section}</span>
             <b>
               Lesson {l.id} · {l.title}
             </b>
+          </div>
+          <div className="lesson-header-progress">
+            <span>
+              Lesson {l.id} of {lessons.length}
+            </span>
+            <div className="progress">
+              <i style={{ width: `${l.id}%` }} />
+            </div>
           </div>
           <div className="lesson-focus-actions">
             <button
@@ -1061,11 +1480,13 @@ function Learn({
             >
               {saved.theme === 'dark' ? <Sun /> : <Moon />}
             </button>
-            <button className="pill ghost" onClick={() => setActive(null)}>
-              Back to course
-            </button>
-            <button className="pill primary" onClick={() => go('dashboard')}>
-              <Home size={15} /> Home
+            <button
+              className="icon-control"
+              onClick={() => go('dashboard')}
+              title="Dashboard"
+              aria-label="Go to dashboard"
+            >
+              <Home size={16} />
             </button>
           </div>
         </header>
@@ -1090,45 +1511,17 @@ function Learn({
             </div>
           </div>
           <TypingSession
+            key={l.id}
             customText={l.exercise}
             modeName={`Lesson ${l.id}`}
             lessonMode
+            lessonTitle={l.title}
+            lessonRecord={saved.lessonRecords[l.id]}
+            completionBadges={(session) => newBadgesFor(l.id, session)}
+            onNext={() => setActive(Math.min(lessons.length, l.id + 1))}
+            onPractice={() => go('practice')}
             best={0}
-            onFinish={(session) =>
-              setSaved((s) => ({
-                ...s,
-                sessions: [session, ...s.sessions].slice(0, 250),
-                xp:
-                  s.xp +
-                  session.xp +
-                  (s.completedLessons.includes(l.id) ? 0 : l.xp),
-                completedLessons: s.completedLessons.includes(l.id)
-                  ? s.completedLessons
-                  : [...s.completedLessons, l.id],
-                lessonStars: {
-                  ...s.lessonStars,
-                  [l.id]: Math.max(
-                    s.lessonStars[l.id] || 0,
-                    lessonPerformance(
-                      session.wpm,
-                      session.accuracy,
-                      calculateMetrics('', '', 1, session.samples).consistency,
-                    ).stars,
-                  ),
-                },
-                lessonScores: {
-                  ...s.lessonScores,
-                  [l.id]: Math.max(
-                    s.lessonScores[l.id] || 0,
-                    lessonPerformance(
-                      session.wpm,
-                      session.accuracy,
-                      calculateMetrics('', '', 1, session.samples).consistency,
-                    ).score,
-                  ),
-                },
-              }))
-            }
+            onFinish={(session) => saveLesson(l.id, l.xp, session)}
           />
         </div>
       </section>
@@ -1137,6 +1530,11 @@ function Learn({
   const list = lessons.filter((l) =>
     (l.title + l.section + l.keys).toLowerCase().includes(q.toLowerCase()),
   );
+  const sectionNames = [...new Set(lessons.map((l) => l.section))],
+    currentLesson = Math.min(saved.completedLessons.length + 1, lessons.length),
+    level = levelFromXp(saved.xp),
+    streak = calculateStreak(saved.sessions.map((s) => s.date.slice(0, 10))),
+    recent = saved.lessonRecords[saved.completedLessons.at(-1) || 0];
   return (
     <section>
       <div className="page-intro">
@@ -1157,41 +1555,147 @@ function Learn({
           />
         </label>
       </div>
-      <div className="course-list">
-        {list.map((l) => {
-          const done = saved.completedLessons.includes(l.id),
-            unlocked = l.id <= saved.completedLessons.length + 1;
-          return (
-            <button
-              key={l.id}
-              disabled={!unlocked}
-              onClick={() => setActive(l.id)}
-            >
-              <span className={`lesson-num ${done ? 'done' : ''}`}>
-                {done ? '✓' : l.id}
-              </span>
-              <span>
-                <small>{l.section}</small>
-                <b>{l.title}</b>
-                <i>{l.keys}</i>
-              </span>
-              <span className="lesson-meta">
-                <i>
-                  {l.wpm} WPM · {l.accuracy}%
-                </i>
-                <b>+{l.xp} XP</b>
-                {saved.lessonStars[l.id] > 0 && (
-                  <strong className="course-stars">
-                    {'★'.repeat(saved.lessonStars[l.id])}
-                    {'☆'.repeat(6 - saved.lessonStars[l.id])}
-                    <small>{saved.lessonScores[l.id]} pts</small>
-                  </strong>
-                )}
-              </span>
-              <ChevronRight />
-            </button>
-          );
-        })}
+      <div className="learn-hub">
+        <aside className="course-rail">
+          <span className="rail-title">Touch Typing Fundamentals</span>
+          <div className="rail-progress">
+            <b>{saved.completedLessons.length}</b>
+            <span>/ {lessons.length} lessons</span>
+          </div>
+          <div className="progress">
+            <i style={{ width: `${saved.completedLessons.length}%` }} />
+          </div>
+          <nav>
+            {sectionNames.map((section) => {
+              const first = lessons.find((l) => l.section === section)?.id || 1,
+                complete = lessons
+                  .filter((l) => l.section === section)
+                  .every((l) => saved.completedLessons.includes(l.id));
+              return (
+                <button
+                  key={section}
+                  className={
+                    lessons[currentLesson - 1]?.section === section
+                      ? 'current'
+                      : ''
+                  }
+                  onClick={() =>
+                    document
+                      .getElementById(`lesson-${first}`)
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }
+                >
+                  <i>
+                    {complete
+                      ? '✓'
+                      : String(sectionNames.indexOf(section) + 1).padStart(
+                          2,
+                          '0',
+                        )}
+                  </i>
+                  <span>{section}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+        <div className="lesson-column">
+          <div className="path-heading">
+            <span className="kicker">CURRENT PATH</span>
+            <h2>{lessons[currentLesson - 1]?.section}</h2>
+            <p>Build control first. Speed will follow.</p>
+          </div>
+          <div className="course-list">
+            {list.map((l) => {
+              const done = saved.completedLessons.includes(l.id),
+                unlocked = l.id <= saved.completedLessons.length + 1;
+              return (
+                <button
+                  key={l.id}
+                  id={`lesson-${l.id}`}
+                  disabled={!unlocked}
+                  onClick={() => setActive(l.id)}
+                >
+                  <span className={`lesson-num ${done ? 'done' : ''}`}>
+                    {done ? '✓' : l.id}
+                  </span>
+                  <span>
+                    <small>{l.section}</small>
+                    <b>{l.title}</b>
+                    <i>{l.keys}</i>
+                  </span>
+                  <span className="lesson-meta">
+                    <i>
+                      {l.wpm} WPM · {l.accuracy}%
+                    </i>
+                    <b>+{l.xp} XP</b>
+                    {saved.lessonStars[l.id] > 0 && (
+                      <strong className="course-stars">
+                        {'★'.repeat(saved.lessonStars[l.id])}
+                        {'☆'.repeat(6 - saved.lessonStars[l.id])}
+                        <small>{saved.lessonScores[l.id]} pts</small>
+                      </strong>
+                    )}
+                  </span>
+                  <em
+                    className={`lesson-status ${done ? 'complete' : l.id === currentLesson ? 'current' : 'available'}`}
+                  >
+                    {done
+                      ? 'Completed'
+                      : l.id === currentLesson
+                        ? 'Continue'
+                        : unlocked
+                          ? 'Start'
+                          : 'Locked'}
+                  </em>
+                  <ChevronRight />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <aside className="learn-insights">
+          <div>
+            <span className="kicker">YOUR POSITION</span>
+            <b className="insight-number">{currentLesson}</b>
+            <small>Current lesson</small>
+          </div>
+          <dl>
+            <div>
+              <dt>Level</dt>
+              <dd>
+                {level.level} · {level.title}
+              </dd>
+            </div>
+            <div>
+              <dt>Current streak</dt>
+              <dd>{streak} days</dd>
+            </div>
+            <div>
+              <dt>Recent speed</dt>
+              <dd>{recent ? `${recent.lastWpm} WPM` : 'No lesson yet'}</dd>
+            </div>
+            <div>
+              <dt>Daily goal</dt>
+              <dd>{saved.dailyGoal} minutes</dd>
+            </div>
+          </dl>
+          <button
+            className="recommended"
+            onClick={() => go(saved.sessions.length ? 'practice' : 'test')}
+          >
+            <Brain />
+            <span>
+              <small>RECOMMENDED</small>
+              <b>
+                {weakFromSessions(saved.sessions).length
+                  ? 'Practice weak keys'
+                  : 'Build your baseline'}
+              </b>
+            </span>
+            <ChevronRight />
+          </button>
+        </aside>
       </div>
     </section>
   );
@@ -1267,7 +1771,10 @@ function KeyHeatmap({ sessions }: { sessions: Session[] }) {
   );
 }
 function Achievements({ saved }: { saved: Saved }) {
-  const n = saved.sessions.length;
+  const [filter, setFilter] = useState('All');
+  const items = evaluateAchievements(achievementSnapshot(saved)),
+    earned = items.filter((a) => a.unlocked).length,
+    shown = items.filter((a) => filter === 'All' || a.category === filter);
   return (
     <section>
       <div className="page-intro">
@@ -1275,15 +1782,39 @@ function Achievements({ saved }: { saved: Saved }) {
           <span className="kicker">ACHIEVEMENTS</span>
           <h1>Quiet proof of consistent work.</h1>
           <p>
-            {n
-              ? `You’ve started your collection with ${Math.min(n, 50)} milestones.`
+            {earned
+              ? `You’ve earned ${earned} of ${items.length} meaningful milestones.`
               : 'Your first achievement is one session away.'}
           </p>
         </div>
       </div>
+      <div className="achievement-filters">
+        {[
+          'All',
+          'Speed',
+          'Accuracy',
+          'Lessons',
+          'Practice',
+          'Streak',
+          'Records',
+        ].map((category) => (
+          <button
+            key={category}
+            className={filter === category ? 'active' : ''}
+            onClick={() => setFilter(category)}
+          >
+            {category}
+          </button>
+        ))}
+      </div>
       <div className="achievement-grid">
-        {achievements.map((a, i) => (
-          <article key={a.id} className={i < n ? 'earned' : ''}>
+        {shown.map((a) => (
+          <article
+            key={a.id}
+            className={
+              a.unlocked ? `earned rarity-${a.rarity.toLowerCase()}` : ''
+            }
+          >
             <div className="award-icon">
               <Award />
             </div>
@@ -1291,10 +1822,12 @@ function Achievements({ saved }: { saved: Saved }) {
             <h3>{a.name}</h3>
             <p>{a.description}</p>
             <div className="progress">
-              <i style={{ width: `${Math.min(100, (n / a.target) * 100)}%` }} />
+              <i style={{ width: `${a.progress}%` }} />
             </div>
             <small>
-              {Math.min(n, a.target)} / {a.target} · +{a.xp} XP
+              {a.progress}% · +{a.xp} XP{' '}
+              {saved.unlockedAchievements[a.id] &&
+                `· ${new Date(saved.unlockedAchievements[a.id]).toLocaleDateString()}`}
             </small>
           </article>
         ))}
@@ -1360,7 +1893,11 @@ function Profile({ saved }: { saved: Saved }) {
         />
         <Stat
           label="Achievements"
-          value={Math.min(saved.sessions.length, 50)}
+          value={
+            evaluateAchievements(achievementSnapshot(saved)).filter(
+              (a) => a.unlocked,
+            ).length
+          }
         />
       </div>
       <div className="section-block">

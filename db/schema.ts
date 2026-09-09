@@ -1,5 +1,6 @@
 import {
   integer,
+  index,
   real,
   sqliteTable,
   text,
@@ -84,6 +85,63 @@ export const lessonProgress = sqliteTable(
     uniqueIndex('idx_lesson_progress_user_lesson').on(t.userId, t.lessonId),
   ],
 );
+export const lessonAttempts = sqliteTable(
+  'lesson_attempts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    lessonId: integer('lesson_id').notNull(),
+    wpm: integer('wpm').notNull(),
+    rawWpm: integer('raw_wpm').notNull(),
+    accuracy: real('accuracy').notNull(),
+    consistency: real('consistency').notNull(),
+    score: integer('score').notNull(),
+    duration: integer('duration').notNull(),
+    errors: integer('errors').notNull(),
+    characters: integer('characters').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    index('idx_lesson_attempts_user_lesson_date').on(
+      t.userId,
+      t.lessonId,
+      t.createdAt,
+    ),
+  ],
+);
+export const lessonBests = sqliteTable(
+  'lesson_bests',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    lessonId: integer('lesson_id').notNull(),
+    bestScore: integer('best_score').notNull(),
+    bestWpm: integer('best_wpm').notNull(),
+    bestAccuracy: real('best_accuracy').notNull(),
+    bestConsistency: real('best_consistency').notNull(),
+    bestDuration: integer('best_duration').notNull(),
+    attemptId: text('attempt_id')
+      .notNull()
+      .references(() => lessonAttempts.id),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('idx_lesson_bests_user_lesson').on(t.userId, t.lessonId)],
+);
+export const achievements = sqliteTable('achievements', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  category: text('category').notNull(),
+  rarity: text('rarity').notNull(),
+  xpReward: integer('xp_reward').notNull(),
+  metric: text('metric').notNull(),
+  target: integer('target').notNull(),
+  ...stamps,
+});
 export const userAchievements = sqliteTable(
   'user_achievements',
   {
@@ -91,7 +149,9 @@ export const userAchievements = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id),
-    achievementId: integer('achievement_id').notNull(),
+    achievementId: text('achievement_id')
+      .notNull()
+      .references(() => achievements.id),
     progress: integer('progress').notNull().default(0),
     unlockedAt: text('unlocked_at'),
     ...stamps,

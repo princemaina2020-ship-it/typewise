@@ -6,6 +6,7 @@ import {
   detectWeakKeys,
   levelFromXp,
   lessonPerformance,
+  updateLessonRecord,
   xpForSession,
 } from '../lib/typing/metrics.ts';
 test('uses five correct characters per word', () =>
@@ -34,6 +35,41 @@ test('streak counts consecutive dates', () =>
     3,
   ));
 test('lesson performance produces a score and six-star maximum', () => {
-  assert.deepEqual(lessonPerformance(60, 100, 100), { score: 100, stars: 6 });
+  assert.deepEqual(lessonPerformance(100, 100, 100), {
+    score: 10000,
+    stars: 6,
+  });
   assert.equal(lessonPerformance(15, 80, 70).stars >= 1, true);
+  assert.equal(lessonPerformance(400, 100, 100).score, 15000);
+});
+
+test('lesson records keep a personal best after a lower score', () => {
+  const first = updateLessonRecord(undefined, {
+    score: 6100,
+    wpm: 51,
+    accuracy: 98,
+    consistency: 90,
+    duration: 72,
+  });
+  const second = updateLessonRecord(first.record, {
+    score: 6650,
+    wpm: 56,
+    accuracy: 99,
+    consistency: 92,
+    duration: 68,
+  });
+  const lower = updateLessonRecord(second.record, {
+    score: 6200,
+    wpm: 53,
+    accuracy: 97,
+    consistency: 86,
+    duration: 71,
+  });
+
+  assert.equal(second.isRecord, true);
+  assert.equal(lower.isRecord, false);
+  assert.equal(lower.record.bestScore, 6650);
+  assert.equal(lower.record.bestWpm, 56);
+  assert.equal(lower.record.attempts, 3);
+  assert.equal(lower.record.lastScore, 6200);
 });
