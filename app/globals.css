@@ -1208,6 +1208,58 @@ button {
   border-color: var(--accent);
   color: var(--accent);
 }
+.lesson-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.lesson-stars {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 26px;
+}
+.lesson-stars svg {
+  width: 34px;
+  height: 34px;
+  color: var(--line);
+  opacity: 0;
+  transform: translateY(16px) scale(0.45);
+  animation: star-arrive 0.55s cubic-bezier(0.2, 1.5, 0.5, 1) forwards;
+}
+.lesson-stars svg.earned {
+  color: #e6a928;
+  filter: drop-shadow(0 5px 8px #e6a92840);
+}
+.lesson-stars strong {
+  margin-left: 8px;
+  opacity: 0;
+  animation: star-label 0.45s ease 0.7s forwards;
+}
+.course-stars {
+  color: #e6a928;
+  font-size: 12px;
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+@keyframes star-arrive {
+  60% {
+    transform: translateY(-5px) scale(1.16);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes star-label {
+  to {
+    opacity: 1;
+  }
+}
 @media (max-width: 620px) {
   .lesson-focus-header {
     grid-template-columns: 1fr auto;

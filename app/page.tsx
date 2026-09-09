@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Star,
   Sun,
   Target,
   Trophy,
@@ -66,6 +67,7 @@ type Saved = {
   sessions: Session[];
   xp: number;
   completedLessons: number[];
+  lessonStars: Record<number, number>;
   dailyGoal: number;
   theme: 'light' | 'dark';
 };
@@ -73,6 +75,7 @@ const empty: Saved = {
   sessions: [],
   xp: 0,
   completedLessons: [],
+  lessonStars: {},
   dailyGoal: 10,
   theme: 'light',
 };
@@ -388,7 +391,11 @@ function TypingSession({
   const keys = useRef<KeyPerformance>({}),
     last = useRef<number>(0),
     input = useRef<HTMLInputElement>(null);
-  const elapsed = started ? Math.min(duration * 1000, now - started) : 0,
+  const elapsed = started
+      ? lessonMode
+        ? now - started
+        : Math.min(duration * 1000, now - started)
+      : 0,
     metrics = calculateMetrics(text, typed, elapsed, samples),
     remaining = Math.max(0, duration - Math.floor(elapsed / 1000));
   const complete = useCallback(() => {
@@ -396,7 +403,12 @@ function TypingSession({
     const final = calculateMetrics(
         text,
         typed,
-        Math.max(1000, Math.min(duration * 1000, Date.now() - started)),
+        Math.max(
+          1000,
+          lessonMode
+            ? Date.now() - started
+            : Math.min(duration * 1000, Date.now() - started),
+        ),
         samples,
       ),
       session = {
@@ -408,23 +420,39 @@ function TypingSession({
         accuracy: final.accuracy,
         errors: final.errors,
         duration: Math.round(
-          Math.min(duration * 1000, Date.now() - started) / 1000,
+          (lessonMode
+            ? Date.now() - started
+            : Math.min(duration * 1000, Date.now() - started)) / 1000,
         ),
-        xp: xpForSession(final.wpm, final.accuracy, duration),
+        xp: xpForSession(
+          final.wpm,
+          final.accuracy,
+          lessonMode ? Math.round((Date.now() - started) / 1000) : duration,
+        ),
         samples,
         keyStats: keys.current,
       };
     setResult(session);
     onFinish(session);
-  }, [started, result, text, typed, duration, samples, onFinish, modeName]);
+  }, [
+    started,
+    result,
+    text,
+    typed,
+    duration,
+    samples,
+    onFinish,
+    modeName,
+    lessonMode,
+  ]);
   useEffect(() => {
     if (!started || result) return;
     const t = setInterval(() => {
       setNow(Date.now());
-      if (Date.now() - started >= duration * 1000) complete();
+      if (!lessonMode && Date.now() - started >= duration * 1000) complete();
     }, 100);
     return () => clearInterval(t);
-  }, [started, result, duration, complete]);
+  }, [started, result, duration, complete, lessonMode]);
   useEffect(() => {
     if (started && !result && typed.length >= text.length) complete();
   }, [typed, text, started, result, complete]);
@@ -439,7 +467,15 @@ function TypingSession({
     );
     setTimeout(() => input.current?.focus(), 0);
   };
-  if (result) return <Result session={result} best={best} retry={reset} />;
+  if (result)
+    return (
+      <Result
+        session={result}
+        best={best}
+        retry={reset}
+        lessonMode={lessonMode}
+      />
+    );
   return (
     <section className="typing-page">
       <div className="page-intro">
@@ -462,29 +498,30 @@ function TypingSession({
           ))}
         </div>
       </div>
-      <div className={`live-stats ${lessonMode ? 'lesson-counter' : ''}`}>
-        <div>
-          <b>{remaining}</b>
-          <span>seconds</span>
+      {!lessonMode && (
+        <div className="live-stats">
+          <div>
+            <b>{remaining}</b>
+            <span>seconds</span>
+          </div>
+          <div>
+            <b>{metrics.wpm}</b>
+            <span>wpm</span>
+          </div>
+          <div>
+            <b>{metrics.accuracy}%</b>
+            <span>accuracy</span>
+          </div>
         </div>
-        {!lessonMode && (
-          <>
-            <div>
-              <b>{metrics.wpm}</b>
-              <span>wpm</span>
-            </div>
-            <div>
-              <b>{metrics.accuracy}%</b>
-              <span>accuracy</span>
-            </div>
-          </>
-        )}
-        {lessonMode && (
+      )}
+      {lessonMode && (
+        <div className="lesson-toolbar">
+          <span>Type the exercise at your own pace.</span>
           <button className="lesson-restart" onClick={reset}>
             <RotateCcw size={16} /> Restart lesson
           </button>
-        )}
-      </div>
+        </div>
+      )}
       <button className="typing-area" onClick={() => input.current?.focus()}>
         {text.split('').map((c, i) => (
           <span
@@ -579,17 +616,42 @@ function Result({
   session,
   best,
   retry,
+  lessonMode = false,
 }: {
   session: Session;
   best: number;
   retry: () => void;
+  lessonMode?: boolean;
 }) {
   const weak = detectWeakKeys(session.keyStats);
+  const stars = session.accuracy >= 97 ? 3 : session.accuracy >= 90 ? 2 : 1;
   return (
     <section className="result-page">
       <span className="eyebrow">
         <Sparkles size={14} /> Session complete
       </span>
+      {lessonMode && (
+        <div
+          className="lesson-stars"
+          aria-label={`${stars} out of 3 stars earned`}
+        >
+          {[1, 2, 3].map((star) => (
+            <Star
+              key={star}
+              className={star <= stars ? 'earned' : ''}
+              fill={star <= stars ? 'currentColor' : 'none'}
+              style={{ animationDelay: `${star * 180}ms` }}
+            />
+          ))}
+          <strong>
+            {stars === 3
+              ? 'Mastered'
+              : stars === 2
+                ? 'Great progress'
+                : 'Lesson complete'}
+          </strong>
+        </div>
+      )}
       <h1>
         {session.wpm > best && best > 0
           ? 'A new personal best.'
@@ -606,7 +668,10 @@ function Result({
         </div>
       </div>
       <div className="metric-grid">
-        <Stat label="Raw speed" value={`${session.rawWpm} wpm`} />
+        <Stat
+          label={lessonMode ? 'Average speed' : 'Raw speed'}
+          value={`${lessonMode ? session.wpm : session.rawWpm} wpm`}
+        />
         <Stat
           label="Consistency"
           value={`${calculateMetrics('', '', 1, session.samples).consistency}%`}
@@ -617,7 +682,9 @@ function Result({
       </div>
       <div className="analysis">
         <div>
-          <span className="kicker">YOUR NEXT MOVE</span>
+          <span className="kicker">
+            {lessonMode ? 'LESSON ANALYSIS' : 'YOUR NEXT MOVE'}
+          </span>
           <h2>
             {weak.length
               ? `Give ${weak.map((w) => w.key).join(', ')} a little attention.`
@@ -1024,6 +1091,13 @@ function Learn({
                 completedLessons: s.completedLessons.includes(l.id)
                   ? s.completedLessons
                   : [...s.completedLessons, l.id],
+                lessonStars: {
+                  ...s.lessonStars,
+                  [l.id]: Math.max(
+                    s.lessonStars[l.id] || 0,
+                    session.accuracy >= 97 ? 3 : session.accuracy >= 90 ? 2 : 1,
+                  ),
+                },
               }))
             }
           />
@@ -1077,6 +1151,12 @@ function Learn({
                   {l.wpm} WPM · {l.accuracy}%
                 </i>
                 <b>+{l.xp} XP</b>
+                {saved.lessonStars[l.id] > 0 && (
+                  <strong className="course-stars">
+                    {'★'.repeat(saved.lessonStars[l.id])}
+                    {'☆'.repeat(3 - saved.lessonStars[l.id])}
+                  </strong>
+                )}
               </span>
               <ChevronRight />
             </button>
