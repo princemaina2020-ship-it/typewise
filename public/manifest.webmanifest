@@ -1,0 +1,10 @@
+{
+  "name": "Typewise",
+  "short_name": "Typewise",
+  "description": "Adaptive touch typing practice",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f3",
+  "theme_color": "#1e6650",
+  "icons": []
+}
