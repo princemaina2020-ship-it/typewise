@@ -175,7 +175,9 @@ export default function App() {
         {view === 'dashboard' && <Dashboard saved={saved} go={go} />}{' '}
         {view === 'test' && <TypingSession onFinish={finish} best={record} />}{' '}
         {view === 'practice' && <Practice saved={saved} onFinish={finish} />}{' '}
-        {view === 'learn' && <Learn saved={saved} setSaved={setSaved} />}{' '}
+        {view === 'learn' && (
+          <Learn saved={saved} setSaved={setSaved} go={go} />
+        )}{' '}
         {view === 'statistics' && <Statistics saved={saved} />}{' '}
         {view === 'achievements' && <Achievements saved={saved} />}{' '}
         {view === 'leaderboard' && <Leaderboard />}{' '}
@@ -625,7 +627,8 @@ function Result({
       </div>
       <div className="result-actions">
         <button className="pill primary" onClick={retry}>
-          <RotateCcw size={15} /> Try again
+          <RotateCcw size={15} />{' '}
+          {session.mode.startsWith('Lesson') ? 'Retake lesson' : 'Try again'}
         </button>
         <button
           className="pill ghost"
@@ -929,59 +932,76 @@ function Practice({
 function Learn({
   saved,
   setSaved,
+  go,
 }: {
   saved: Saved;
   setSaved: React.Dispatch<React.SetStateAction<Saved>>;
+  go: (view: View) => void;
 }) {
   const [q, setQ] = useState(''),
     [active, setActive] = useState<number | null>(null);
   if (active) {
     const l = lessons[active - 1];
     return (
-      <section className="lesson-active">
-        <button className="text-link" onClick={() => setActive(null)}>
-          ← Back to course
-        </button>
-        <span className="kicker">
-          LESSON {l.id} · {l.section.toUpperCase()}
-        </span>
-        <h1>{l.title}</h1>
-        <p>
-          Focus on relaxed movement and return your fingers to their resting
-          position after each key.
-        </p>
-        <div className="lesson-goals">
-          <span>
-            <Target /> {l.wpm} WPM
-          </span>
-          <span>
-            <Gauge /> {l.accuracy}% accuracy
-          </span>
-          <span>
-            <Zap /> +{l.xp} XP
-          </span>
+      <section className="lesson-focus">
+        <header className="lesson-focus-header">
+          <button className="brand" onClick={() => go('dashboard')}>
+            <Logo /> <span>{BRAND.name}</span>
+          </button>
+          <div className="lesson-breadcrumb">
+            <span>{l.section}</span>
+            <b>
+              Lesson {l.id} · {l.title}
+            </b>
+          </div>
+          <div className="lesson-focus-actions">
+            <button className="pill ghost" onClick={() => setActive(null)}>
+              Back to course
+            </button>
+            <button className="pill primary" onClick={() => go('dashboard')}>
+              <Home size={15} /> Home
+            </button>
+          </div>
+        </header>
+        <div className="lesson-focus-body">
+          <div className="lesson-brief">
+            <span className="kicker">LESSON {l.id}</span>
+            <h1>{l.title}</h1>
+            <p>
+              Keep your shoulders relaxed. Let accuracy lead and return each
+              finger to its resting position.
+            </p>
+            <div className="lesson-goals">
+              <span>
+                <Target /> {l.wpm} WPM
+              </span>
+              <span>
+                <Gauge /> {l.accuracy}% accuracy
+              </span>
+              <span>
+                <Zap /> +{l.xp} XP
+              </span>
+            </div>
+          </div>
+          <TypingSession
+            customText={l.exercise}
+            modeName={`Lesson ${l.id}`}
+            best={0}
+            onFinish={(session) =>
+              setSaved((s) => ({
+                ...s,
+                sessions: [session, ...s.sessions].slice(0, 250),
+                xp:
+                  s.xp +
+                  session.xp +
+                  (s.completedLessons.includes(l.id) ? 0 : l.xp),
+                completedLessons: s.completedLessons.includes(l.id)
+                  ? s.completedLessons
+                  : [...s.completedLessons, l.id],
+              }))
+            }
+          />
         </div>
-        <div className="lesson-copy">
-          <kbd>{l.keys || 'ALL KEYS'}</kbd>
-          <p>{l.exercise}</p>
-        </div>
-        <button
-          className="pill primary"
-          onClick={() => {
-            setSaved((s) =>
-              s.completedLessons.includes(l.id)
-                ? s
-                : {
-                    ...s,
-                    completedLessons: [...s.completedLessons, l.id],
-                    xp: s.xp + l.xp,
-                  },
-            );
-            setActive(null);
-          }}
-        >
-          Complete lesson <ChevronRight size={15} />
-        </button>
       </section>
     );
   }
