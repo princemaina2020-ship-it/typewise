@@ -221,8 +221,21 @@ button {
   background: color-mix(in srgb, var(--bad) 12%, transparent);
 }
 .current {
-  color: var(--ink) !important;
-  border-bottom: 2px solid var(--accent);
+  position: relative;
+  display: inline-block;
+  color: inherit !important;
+  border-bottom: 0;
+}
+.current::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0.12em;
+  width: 0.36em;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--accent);
+  transform: translateX(-50%);
 }
 .demo-foot button,
 .type-hint button {
@@ -2581,7 +2594,7 @@ button {
 /* Next-key cue: a quiet underline instead of recoloring the keycap. */
 .key-row kbd.next,
 .dark .key-row kbd.next {
-  color: var(--ink);
+  color: var(--muted);
   border-color: var(--key-border);
   background: var(--key);
   box-shadow: 0 2px 0 var(--key-border);
