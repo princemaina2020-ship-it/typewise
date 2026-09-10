@@ -3395,3 +3395,113 @@ button {
   }
 }
 }
+
+/* ChatGPT-like dark theme: separation by surface tone, never bright outlines. */
+.dark {
+  --bg: #212121;
+  --paper: #2f2f2f;
+  --ink: #ececec;
+  --muted: #b4b4b4;
+  --line: transparent;
+  --accent: #76b7ff;
+  --mint: #292929;
+  --soft: #272727;
+  --key: #303030;
+  --key-border: #303030;
+  --lesson-track: #383838;
+  --shadow: 0 14px 36px #0000002e;
+}
+.dark body,
+.dark .main,
+.dark .lesson-focus,
+.dark .lesson-focus-body:has(.lesson-result-screen),
+.dark .lesson-result-screen {
+  background-color: var(--bg);
+}
+.dark .sidebar {
+  border-right: 0;
+  background: #171717;
+}
+.dark .topbar,
+.dark .lesson-focus-header {
+  border-color: transparent;
+  background: var(--bg);
+  box-shadow: none;
+}
+.dark .page-intro,
+.dark .lesson-toolbar,
+.dark .type-hint,
+.dark .achievement-filters,
+.dark .metric-grid,
+.dark .stat,
+.dark .result-page .metric-grid .stat,
+.dark .settings-list > div,
+.dark .session-table > div,
+.dark .course-list > button,
+.dark .story li,
+.dark .landing footer {
+  border-color: transparent;
+}
+.dark .goal-panel,
+.dark .overview-panel,
+.dark .section-block,
+.dark .recent,
+.dark .chart-card,
+.dark .metric-grid,
+.dark .analysis,
+.dark .course-list,
+.dark .settings-list,
+.dark .achievement-grid article,
+.dark .lesson-start,
+.dark .result-score-panel,
+.dark .result-metric-panel,
+.dark .lesson-result-summary > span {
+  border-color: transparent;
+  box-shadow: none;
+}
+.dark .theme-button,
+.dark .icon-control,
+.dark .lesson-tools > button,
+.dark .lesson-back,
+.dark .lesson-restart,
+.dark .pill.secondary,
+.dark .pill.ghost,
+.dark .search,
+.dark .key-row kbd {
+  border-color: transparent;
+  background: var(--paper);
+  box-shadow: none;
+}
+.dark .pill.primary {
+  border-color: transparent;
+}
+.dark .progress,
+.dark .meter-track {
+  border-color: transparent;
+  background: #3a3a3a;
+}
+.dark .score-panel-meta,
+.dark .metric-panel-heading {
+  border-color: transparent;
+}
+.dark .score-panel-meta > span + span {
+  border-left-color: transparent;
+}
+
+@media (min-width: 761px) {
+  html:has(.lesson-focus),
+  body:has(.lesson-focus) {
+    overflow: hidden;
+  }
+  .app-shell:has(.lesson-focus) .main {
+    min-height: 0;
+    padding: 0;
+  }
+  .lesson-focus {
+    overflow: hidden !important;
+  }
+  .lesson-focus-header {
+    min-height: 68px;
+    height: 68px;
+  }
+}

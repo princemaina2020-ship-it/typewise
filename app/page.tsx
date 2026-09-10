@@ -266,6 +266,47 @@ function Logo() {
     </span>
   );
 }
+
+function playKeyboardSound(context: AudioContext, correct: boolean) {
+  const now = context.currentTime,
+    length = Math.floor(context.sampleRate * 0.045),
+    buffer = context.createBuffer(1, length, context.sampleRate),
+    channel = buffer.getChannelData(0),
+    noise = context.createBufferSource(),
+    filter = context.createBiquadFilter(),
+    clickGain = context.createGain(),
+    body = context.createOscillator(),
+    bodyGain = context.createGain();
+
+  for (let i = 0; i < length; i++) {
+    const decay = Math.pow(1 - i / length, 3.4);
+    channel[i] = (Math.random() * 2 - 1) * decay;
+  }
+  noise.buffer = buffer;
+  filter.type = 'bandpass';
+  filter.frequency.value =
+    (correct ? 1850 : 1050) + (Math.random() - 0.5) * 180;
+  filter.Q.value = correct ? 1.1 : 0.8;
+  clickGain.gain.setValueAtTime(0.045, now);
+  clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+  noise.connect(filter);
+  filter.connect(clickGain);
+  clickGain.connect(context.destination);
+
+  body.type = 'sine';
+  body.frequency.setValueAtTime(correct ? 118 : 82, now);
+  body.frequency.exponentialRampToValueAtTime(correct ? 82 : 58, now + 0.04);
+  bodyGain.gain.setValueAtTime(correct ? 0.026 : 0.034, now);
+  bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  body.connect(bodyGain);
+  bodyGain.connect(context.destination);
+
+  noise.start(now);
+  noise.stop(now + 0.05);
+  body.start(now);
+  body.stop(now + 0.055);
+}
+
 function Landing({
   start,
   explore,
@@ -462,6 +503,8 @@ function TypingSession({
     );
   const keys = useRef<KeyPerformance>({}),
     last = useRef<number>(0),
+    keystrokes = useRef({ total: 0, correct: 0 }),
+    sampleWindow = useRef({ startedAt: 0, characters: 0 }),
     input = useRef<HTMLInputElement>(null),
     audioContext = useRef<AudioContext | null>(null);
   const elapsed = started
@@ -469,20 +512,28 @@ function TypingSession({
         ? now - started
         : Math.min(duration * 1000, now - started)
       : 0,
-    metrics = calculateMetrics(text, typed, elapsed, samples),
+    metrics = calculateMetrics(
+      text,
+      typed,
+      elapsed,
+      samples,
+      keystrokes.current,
+    ),
     remaining = Math.max(0, duration - Math.floor(elapsed / 1000));
   const complete = useCallback(() => {
     if (!started || result) return;
+    const finishedAt = Date.now();
     const final = calculateMetrics(
         text,
         typed,
         Math.max(
           1000,
           lessonMode
-            ? Date.now() - started
-            : Math.min(duration * 1000, Date.now() - started),
+            ? finishedAt - started
+            : Math.min(duration * 1000, finishedAt - started),
         ),
         samples,
+        keystrokes.current,
       ),
       session = {
         id: crypto.randomUUID(),
@@ -496,14 +547,14 @@ function TypingSession({
           1,
           Math.round(
             (lessonMode
-              ? Date.now() - started
-              : Math.min(duration * 1000, Date.now() - started)) / 1000,
+              ? finishedAt - started
+              : Math.min(duration * 1000, finishedAt - started)) / 1000,
           ),
         ),
         xp: xpForSession(
           final.wpm,
           final.accuracy,
-          lessonMode ? Math.round((Date.now() - started) / 1000) : duration,
+          lessonMode ? Math.round((finishedAt - started) / 1000) : duration,
         ),
         samples,
         keyStats: keys.current,
@@ -543,6 +594,9 @@ function TypingSession({
     setBadges([]);
     setBaselineRecord(lessonRecord);
     keys.current = {};
+    keystrokes.current = { total: 0, correct: 0 };
+    sampleWindow.current = { startedAt: 0, characters: 0 };
+    last.current = 0;
     setText(
       customText || passages[Math.floor(Math.random() * passages.length)],
     );
@@ -690,54 +744,61 @@ function TypingSession({
         ref={input}
         className="sr-input"
         value={typed}
-        onPaste={(event) => {
-          if (lessonMode) event.preventDefault();
-        }}
+        onPaste={(event) => event.preventDefault()}
         onChange={(e) => {
           const val = e.target.value.slice(0, text.length);
+          const eventTime = Date.now();
           if (!started) {
-            setStarted(Date.now());
-            last.current = Date.now();
+            setStarted(eventTime);
+            sampleWindow.current = { startedAt: eventTime, characters: -1 };
           }
-          const i = val.length - 1;
-          if (i >= 0 && val.length > typed.length) {
-            const key =
-                text[i].toUpperCase() === ' ' ? 'SPACE' : text[i].toUpperCase(),
-              delta = Date.now() - last.current,
-              p = keys.current[key] || {
-                presses: 0,
-                correct: 0,
-                totalResponseMs: 0,
+          if (val.length > typed.length) {
+            let lastAttemptCorrect = true;
+            for (let i = typed.length; i < val.length; i++) {
+              const key =
+                  text[i].toUpperCase() === ' '
+                    ? 'SPACE'
+                    : text[i].toUpperCase(),
+                attemptCorrect = val[i] === text[i],
+                delta = last.current ? eventTime - last.current : 0,
+                timed = delta > 0 && delta <= 3000,
+                p = keys.current[key] || {
+                  presses: 0,
+                  correct: 0,
+                  totalResponseMs: 0,
+                  timedPresses: 0,
+                };
+              keys.current[key] = {
+                presses: p.presses + 1,
+                correct: p.correct + (attemptCorrect ? 1 : 0),
+                totalResponseMs: p.totalResponseMs + (timed ? delta : 0),
+                timedPresses: (p.timedPresses || 0) + (timed ? 1 : 0),
               };
-            keys.current[key] = {
-              presses: p.presses + 1,
-              correct: p.correct + (val[i] === text[i] ? 1 : 0),
-              totalResponseMs: p.totalResponseMs + delta,
-            };
+              keystrokes.current.total++;
+              if (attemptCorrect) keystrokes.current.correct++;
+              sampleWindow.current.characters++;
+              lastAttemptCorrect = attemptCorrect;
+              last.current = eventTime;
+            }
             if (sound) {
               try {
                 const context = audioContext.current || new AudioContext();
                 audioContext.current = context;
-                const oscillator = context.createOscillator(),
-                  gain = context.createGain();
-                oscillator.frequency.value = val[i] === text[i] ? 520 : 170;
-                gain.gain.setValueAtTime(0.025, context.currentTime);
-                gain.gain.exponentialRampToValueAtTime(
-                  0.001,
-                  context.currentTime + 0.035,
-                );
-                oscillator.connect(gain);
-                gain.connect(context.destination);
-                oscillator.start();
-                oscillator.stop(context.currentTime + 0.04);
+                if (context.state === 'suspended') void context.resume();
+                playKeyboardSound(context, lastAttemptCorrect);
               } catch {}
             }
-            last.current = Date.now();
-            if (i % 5 === 0 && started)
-              setSamples((s) => [
-                ...s,
-                calculateMetrics(text, val, Date.now() - started).wpm,
-              ]);
+            const windowMs = eventTime - sampleWindow.current.startedAt;
+            if (sampleWindow.current.characters >= 5 && windowMs >= 250) {
+              const intervalWpm = Math.min(
+                250,
+                Math.round(
+                  sampleWindow.current.characters / 5 / (windowMs / 60000),
+                ),
+              );
+              setSamples((current) => [...current, intervalWpm]);
+              sampleWindow.current = { startedAt: eventTime, characters: 0 };
+            }
           }
           setTyped(val);
         }}
@@ -995,7 +1056,7 @@ function Result({
           <span>
             <Activity size={15} />
             {weak.length
-              ? `Focus next: ${weak.map((key) => key.key).join(', ')}`
+              ? weak[0].recommendation
               : `${consistency}% consistency · no problem keys`}
           </span>
           {badges.length > 0 && (
@@ -1167,7 +1228,7 @@ function Result({
           </h2>
           <p>
             {weak.length
-              ? 'These keys were slower or less accurate than the rest. A focused drill will help reinforce them.'
+              ? weak[0].recommendation
               : 'Keep the same relaxed rhythm and gradually extend the session.'}
           </p>
         </div>
@@ -1353,7 +1414,7 @@ function Dashboard({ saved, go }: { saved: Saved; go: (v: View) => void }) {
           </h2>
           <p>
             {weak.length
-              ? 'A short adaptive drill will place these keys in natural words.'
+              ? `${weak[0].recommendation} The adaptive drill uses those keys in natural words.`
               : 'Complete a typing session and we’ll find your first focus keys.'}
           </p>
           <button
@@ -1378,6 +1439,7 @@ function weakFromSessions(ss: Session[]) {
         presses: p.presses + v.presses,
         correct: p.correct + v.correct,
         totalResponseMs: p.totalResponseMs + v.totalResponseMs,
+        timedPresses: (p.timedPresses || 0) + (v.timedPresses ?? v.presses),
       };
     }),
   );
@@ -1844,6 +1906,7 @@ function KeyHeatmap({ sessions }: { sessions: Session[] }) {
         presses: p.presses + v.presses,
         correct: p.correct + v.correct,
         totalResponseMs: p.totalResponseMs + v.totalResponseMs,
+        timedPresses: (p.timedPresses || 0) + (v.timedPresses ?? v.presses),
       };
     }),
   );

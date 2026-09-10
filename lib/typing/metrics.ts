@@ -9,35 +9,51 @@ export type TypingMetrics = {
   cpm: number;
   words: number;
 };
-/** Industry convention: five correct characters equal one word. */
+export type KeystrokeSummary = { total: number; correct: number };
+
+/**
+ * Standard typing convention: one normalized word is five characters,
+ * including spaces. WPM uses correct final characters, raw WPM uses every
+ * character attempt, and accuracy includes mistakes that were later corrected.
+ */
 export function calculateMetrics(
   target: string,
   typed: string,
   elapsedMs: number,
   samples: number[] = [],
+  keystrokes?: KeystrokeSummary,
 ): TypingMetrics {
   let correct = 0;
   for (let i = 0; i < typed.length; i++) if (typed[i] === target[i]) correct++;
-  const incorrect = typed.length - correct,
+  const totalAttempts = Math.max(typed.length, keystrokes?.total || 0),
+    correctAttempts = Math.min(
+      totalAttempts,
+      Math.max(0, keystrokes?.correct ?? correct),
+    ),
+    incorrect = totalAttempts - correctAttempts,
     minutes = Math.max(elapsedMs / 60000, 1 / 60000),
-    mean = samples.length
-      ? samples.reduce((a, b) => a + b, 0) / samples.length
+    validSamples = samples.filter(
+      (sample) => Number.isFinite(sample) && sample >= 0,
+    ),
+    mean = validSamples.length
+      ? validSamples.reduce((a, b) => a + b, 0) / validSamples.length
       : 0;
-  const deviation = samples.length
+  const deviation = validSamples.length > 1
     ? Math.sqrt(
-        samples.reduce((sum, n) => sum + (n - mean) ** 2, 0) / samples.length,
+        validSamples.reduce((sum, n) => sum + (n - mean) ** 2, 0) /
+          validSamples.length,
       )
     : 0;
   return {
     wpm: Math.round(correct / 5 / minutes),
-    rawWpm: Math.round(typed.length / 5 / minutes),
-    accuracy: typed.length
-      ? Math.round((correct / typed.length) * 1000) / 10
+    rawWpm: Math.round(totalAttempts / 5 / minutes),
+    accuracy: totalAttempts
+      ? Math.round((correctAttempts / totalAttempts) * 1000) / 10
       : 100,
     errors: incorrect,
     correct,
     incorrect,
-    consistency: mean
+    consistency: validSamples.length > 1 && mean
       ? Math.max(0, Math.round((1 - deviation / mean) * 100))
       : 100,
     cpm: Math.round(correct / minutes),
@@ -46,21 +62,58 @@ export function calculateMetrics(
 }
 export type KeyPerformance = Record<
   string,
-  { presses: number; correct: number; totalResponseMs: number }
+  {
+    presses: number;
+    correct: number;
+    totalResponseMs: number;
+    timedPresses?: number;
+  }
 >;
 export function detectWeakKeys(stats: KeyPerformance, limit = 3) {
-  return Object.entries(stats)
+  const eligible = Object.entries(stats).filter(([, value]) => value.presses >= 3),
+    latencies = eligible
+      .map(([, value]) => {
+        const timed = value.timedPresses ?? value.presses;
+        return timed ? value.totalResponseMs / timed : 0;
+      })
+      .filter((latency) => latency > 0)
+      .sort((a, b) => a - b),
+    baseline = latencies.length
+      ? latencies[Math.floor(latencies.length / 2)]
+      : 0;
+  return eligible
     .map(([key, v]) => {
       const accuracy = v.presses ? v.correct / v.presses : 1,
-        response = v.presses ? v.totalResponseMs / v.presses : 0;
+        timed = v.timedPresses ?? v.presses,
+        response = timed ? v.totalResponseMs / timed : 0,
+        inaccurate = accuracy < 0.95,
+        slow =
+          timed >= 3 &&
+          (response > 420 ||
+            (baseline > 0 && response > Math.max(280, baseline * 1.35))),
+        errorSeverity = Math.min(1, Math.max(0, (0.95 - accuracy) / 0.35)),
+        slowSeverity = slow
+          ? Math.min(1, Math.max(0, response / Math.max(baseline, 220) - 1) / 1.5)
+          : 0,
+        confidence = Math.min(1, v.presses / 12);
       return {
         key,
-        accuracy: Math.round(accuracy * 100),
+        accuracy: Math.round(accuracy * 1000) / 10,
         response: Math.round(response),
-        score: (1 - accuracy) * 0.7 + Math.min(response / 600, 1) * 0.3,
+        score:
+          (errorSeverity * 0.72 + slowSeverity * 0.28) *
+          (0.65 + confidence * 0.35),
+        recommendation:
+          inaccurate && slow
+            ? `Practice ${key} in short letter pairs—accuracy first, then pace.`
+            : inaccurate
+              ? `Slow down on ${key} and repeat clean ${key}-key combinations.`
+              : `Drill transitions into ${key} with a light, even movement.`,
+        isAccuracyIssue: inaccurate,
+        isSpeedIssue: slow,
       };
     })
-    .filter((x) => x.accuracy < 96 || x.response > 240)
+    .filter((item) => item.isAccuracyIssue || item.isSpeedIssue)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 }
@@ -81,16 +134,42 @@ export function lessonPerformance(
 ) {
   // Scores remain comparable even when a browser or input method emits an
   // impossible burst of characters in a single event.
-  const verifiedWpm = Math.min(Math.max(wpm, 0), 150);
+  const verifiedWpm = Math.min(Math.max(wpm, 0), 250),
+    verifiedAccuracy = Math.min(Math.max(accuracy, 0), 100),
+    verifiedConsistency = Math.min(Math.max(consistency, 0), 100);
   const score = Math.max(
     0,
     Math.round(
-      verifiedWpm * 100 * (accuracy / 100) * (0.75 + consistency / 400),
+      verifiedWpm *
+        100 *
+        (verifiedAccuracy / 100) *
+        (0.75 + verifiedConsistency / 400),
     ),
-  );
+  ),
+    scoreStars = score ? Math.min(6, Math.ceil(score / 1500)) : 0,
+    accuracyCap =
+      verifiedAccuracy >= 98
+        ? 6
+        : verifiedAccuracy >= 95
+          ? 5
+          : verifiedAccuracy >= 90
+            ? 4
+            : verifiedAccuracy >= 85
+              ? 3
+              : verifiedAccuracy >= 75
+                ? 2
+                : 1,
+    consistencyCap =
+      verifiedConsistency >= 85
+        ? 6
+        : verifiedConsistency >= 70
+          ? 5
+          : verifiedConsistency >= 55
+            ? 4
+            : 3;
   return {
     score,
-    stars: Math.max(1, Math.min(6, Math.ceil(score / 1500))),
+    stars: Math.min(scoreStars, accuracyCap, consistencyCap),
   };
 }
 export type LessonRecordData = {
