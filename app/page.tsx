@@ -753,14 +753,14 @@ function TypingSession({
       {lessonMode && showFingers && (
         <FingerGuide next={text[typed.length] || ''} />
       )}
-      <div className="type-hint">
-        <span>Click above, then type. Backspace is welcome.</span>
-        {!lessonMode && (
+      {!lessonMode && (
+        <div className="type-hint">
+          <span>Click above, then type. Backspace is welcome.</span>
           <button onClick={reset}>
             <RotateCcw size={14} /> restart
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1612,25 +1612,6 @@ function Learn({
           </div>
         </header>
         <div className="lesson-focus-body">
-          <div className="lesson-brief">
-            <span className="kicker">LESSON {l.id}</span>
-            <h1>{l.title}</h1>
-            <p>
-              Keep your shoulders relaxed. Let accuracy lead and return each
-              finger to its resting position.
-            </p>
-            <div className="lesson-goals">
-              <span>
-                <Target /> {l.wpm} WPM
-              </span>
-              <span>
-                <Gauge /> {l.accuracy}% accuracy
-              </span>
-              <span>
-                <Zap /> +{l.xp} XP
-              </span>
-            </div>
-          </div>
           <TypingSession
             key={l.id}
             customText={l.exercise}
