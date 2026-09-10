@@ -293,9 +293,6 @@ function Landing({
       </header>
       <main>
         <section className="hero">
-          <div className="eyebrow">
-            <Sparkles size={14} /> A calmer way to get faster
-          </div>
           <h1>
             Type with clarity.
             <br />
@@ -879,68 +876,117 @@ function Result({
         session.duration % 60,
       ).padStart(2, '0')}`,
       speedScale = Math.max(targetWpm * 2, 40),
-      accuracyAngle = `${Math.min(session.accuracy, 100) * 3.6}deg`,
-      speedAngle = `${Math.min(session.wpm / speedScale, 1) * 360}deg`;
+      speedProgress = Math.min((session.wpm / speedScale) * 100, 100);
     return (
       <section className="result-page lesson-result-screen">
-        <span className="result-complete-label">Lesson complete</span>
-        <div
-          className="result-star-arc"
-          aria-label={`${stars} out of 6 stars earned`}
-        >
-          {[1, 2, 3, 4, 5, 6].map((star) => (
-            <Star
-              key={star}
-              className={star <= stars ? 'earned' : ''}
-              fill={star <= stars ? 'currentColor' : 'none'}
-              style={{ animationDelay: `${star * 130}ms` }}
-            />
-          ))}
+        <div className="result-heading">
+          <span className="result-complete-label">Lesson complete</span>
+          <h2>{lessonTitle}</h2>
         </div>
-        <div className="result-dial-row">
-          <div className="dial-column">
-            <div
-              className="result-dial accuracy-dial"
-              style={{ '--gauge-angle': accuracyAngle } as React.CSSProperties}
-              aria-label={`${session.accuracy}% accuracy`}
-            >
-              <div>
-                <b>{session.accuracy}%</b>
-                <small>real accuracy</small>
-              </div>
+        <div className="result-performance-layout">
+          <article className="result-score-panel">
+            <span className="result-panel-label">Performance score</span>
+            <div className="lesson-score-lockup">
+              <strong>{score.toLocaleString()}</strong>
+              <small>points</small>
             </div>
-            <span className="dial-requirement">{targetAccuracy}% minimum</span>
-            <strong>accuracy</strong>
-          </div>
-          <div className="result-center-column">
-            <div className="duration-dial">
-              <div>
+            <div
+              className="result-star-line"
+              aria-label={`${stars} out of 6 stars earned`}
+            >
+              {[1, 2, 3, 4, 5, 6].map((star) => (
+                <Star
+                  key={star}
+                  className={star <= stars ? 'earned' : ''}
+                  fill={star <= stars ? 'currentColor' : 'none'}
+                  style={{ animationDelay: `${220 + star * 110}ms` }}
+                />
+              ))}
+            </div>
+            <div className="score-panel-meta">
+              <span>
+                <small>Duration</small>
                 <b>{duration}</b>
-                <small>min : seconds</small>
-              </div>
+              </span>
+              <span>
+                <small>Rating</small>
+                <b>{stars}/6 stars</b>
+              </span>
             </div>
-            <strong>duration</strong>
-            <div className="lesson-score-number">{score.toLocaleString()}</div>
-            <span className={isHighScore ? 'new-score' : ''}>
+            <span className={isHighScore ? 'score-status new-score' : 'score-status'}>
               {isHighScore
-                ? 'NEW HIGH SCORE'
-                : `BEST ${Math.max(score, previousBest).toLocaleString()}`}
+                ? 'New personal best'
+                : `Best ${Math.max(score, previousBest).toLocaleString()}`}
             </span>
-          </div>
-          <div className="dial-column">
-            <div
-              className="result-dial speed-dial"
-              style={{ '--gauge-angle': speedAngle } as React.CSSProperties}
-              aria-label={`${session.wpm} words per minute`}
-            >
+          </article>
+
+          <article className="result-metric-panel">
+            <div className="metric-panel-heading">
               <div>
-                <b>{session.wpm}</b>
-                <small>wpm</small>
+                <span className="result-panel-label">Performance detail</span>
+                <h3>Your lesson at a glance</h3>
+              </div>
+              <Activity size={20} />
+            </div>
+            <div className="result-metric-list">
+              <div className="performance-meter accuracy-meter">
+                <div className="meter-copy">
+                  <span>
+                    <Gauge size={17} /> Accuracy
+                  </span>
+                  <strong>{session.accuracy}%</strong>
+                </div>
+                <div className="meter-track">
+                  <i
+                    style={
+                      {
+                        '--meter-fill': `${Math.min(session.accuracy, 100)}%`,
+                      } as React.CSSProperties
+                    }
+                  />
+                  <em style={{ left: `${Math.min(targetAccuracy, 100)}%` }} />
+                </div>
+                <small>Target {targetAccuracy}%</small>
+              </div>
+              <div className="performance-meter speed-meter">
+                <div className="meter-copy">
+                  <span>
+                    <Zap size={17} /> Typing speed
+                  </span>
+                  <strong>{session.wpm} <small>WPM</small></strong>
+                </div>
+                <div className="meter-track">
+                  <i
+                    style={
+                      {
+                        '--meter-fill': `${speedProgress}%`,
+                      } as React.CSSProperties
+                    }
+                  />
+                  <em style={{ left: `${Math.min((targetWpm / speedScale) * 100, 100)}%` }} />
+                </div>
+                <small>Target {targetWpm} WPM</small>
+              </div>
+              <div className="performance-meter rhythm-meter">
+                <div className="meter-copy">
+                  <span>
+                    <Activity size={17} /> Rhythm
+                  </span>
+                  <strong>{consistency}%</strong>
+                </div>
+                <div className="meter-track">
+                  <i
+                    style={
+                      {
+                        '--meter-fill': `${Math.min(consistency, 100)}%`,
+                      } as React.CSSProperties
+                    }
+                  />
+                </div>
+                <small>Consistency across the lesson</small>
               </div>
             </div>
-            <span className="dial-requirement">Goal {targetWpm} wpm</span>
-            <strong>speed</strong>
-          </div>
+          </article>
         </div>
         <div className="lesson-result-summary">
           <span>

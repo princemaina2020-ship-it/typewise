@@ -1125,17 +1125,17 @@ button {
 }
 .dark {
   --bg: #151718;
-  --paper: #1b1e20;
+  --paper: #151718;
   --ink: #f0eee9;
   --muted: #9c9c98;
   --line: #303437;
   --accent: #75a9df;
-  --mint: #202d39;
-  --soft: #222629;
+  --mint: #151718;
+  --soft: #151718;
   --success: #71b69b;
   --warning: #d8a85b;
   --danger: #e17c74;
-  --key: #202326;
+  --key: #151718;
   --key-border: #393e42;
   --lesson-track: #30383e;
 }
@@ -1148,55 +1148,61 @@ button {
   position: fixed;
   z-index: -1;
   pointer-events: none;
-  right: 3vw;
-  bottom: 5vh;
-  width: 300px;
-  height: 230px;
-  opacity: 0.055;
+  right: 1.5vw;
+  bottom: 3vh;
+  width: min(38vw, 460px);
+  height: min(43vh, 360px);
+  opacity: 0.065;
 }
 .dark .page-surface::before {
-  opacity: 0.09;
+  opacity: 0.11;
 }
 .page-dashboard::before {
   background-image:
+    linear-gradient(135deg, transparent 48%, var(--accent) 49% 51%, transparent 52%),
     linear-gradient(var(--accent) 1px, transparent 1px),
     linear-gradient(90deg, var(--accent) 1px, transparent 1px);
-  background-size: 34px 34px;
+  background-size: 150px 150px, 46px 46px, 46px 46px;
+  border-radius: 48% 12% 42% 18%;
+  transform: rotate(-5deg);
   mask-image: linear-gradient(135deg, transparent, #000);
 }
 .page-learn::before {
   background:
-    repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 42px),
-    repeating-linear-gradient(0deg, var(--accent) 0 2px, transparent 2px 42px);
-  border-radius: 40% 12% 40% 20%;
-  transform: rotate(-8deg);
+    radial-gradient(circle at 50% 50%, transparent 0 12%, var(--accent) 12.5% 13%, transparent 13.5% 27%, var(--accent) 27.5% 28%, transparent 28.5%),
+    repeating-linear-gradient(90deg, var(--accent) 0 1px, transparent 1px 58px),
+    repeating-linear-gradient(0deg, var(--accent) 0 1px, transparent 1px 58px);
+  border-radius: 46% 16% 42% 22%;
+  transform: rotate(-7deg);
+  clip-path: polygon(9% 14%, 88% 0, 100% 82%, 18% 100%);
 }
 .page-test::before,
 .page-practice::before {
-  background: repeating-linear-gradient(
-    -12deg,
-    transparent 0 20px,
-    var(--accent) 20px 22px,
-    transparent 22px 38px
-  );
-  clip-path: polygon(14% 20%, 100% 0, 86% 80%, 0 100%);
+  background:
+    repeating-linear-gradient(-12deg, transparent 0 28px, var(--accent) 28px 30px, transparent 30px 56px),
+    repeating-linear-gradient(78deg, transparent 0 54px, var(--accent) 54px 55px, transparent 55px 108px);
+  clip-path: polygon(10% 18%, 100% 0, 88% 84%, 0 100%);
 }
 .page-statistics::before {
   background:
+    repeating-radial-gradient(circle, transparent 0 35px, var(--accent) 36px 37px, transparent 38px 70px),
     linear-gradient(var(--accent) 1px, transparent 1px),
     linear-gradient(90deg, var(--accent) 1px, transparent 1px);
-  background-size: 30px 30px;
+  background-size: auto, 44px 44px, 44px 44px;
   border-radius: 50%;
 }
 .page-achievements::before {
   background:
-    radial-gradient(circle at 20% 30%, var(--accent) 0 4px, transparent 5px),
-    radial-gradient(circle at 70% 65%, var(--accent) 0 7px, transparent 8px),
-    radial-gradient(circle at 55% 18%, var(--accent) 0 3px, transparent 4px);
+    linear-gradient(32deg, transparent 49.7%, var(--accent) 50%, transparent 50.3%),
+    linear-gradient(-28deg, transparent 49.7%, var(--accent) 50%, transparent 50.3%),
+    radial-gradient(circle at 18% 30%, var(--accent) 0 6px, transparent 7px),
+    radial-gradient(circle at 72% 68%, var(--accent) 0 10px, transparent 11px),
+    radial-gradient(circle at 58% 16%, var(--accent) 0 5px, transparent 6px);
 }
 .page-profile::before {
-  border: 28px double var(--accent);
+  border: 34px double var(--accent);
   border-radius: 50%;
+  box-shadow: inset 0 0 0 42px transparent, inset 0 0 0 43px var(--accent);
 }
 .page-settings::before {
   background: repeating-conic-gradient(
@@ -1975,6 +1981,409 @@ button {
   }
 }
 
+/* Original lesson result: compact scorecard with animated performance tracks. */
+.lesson-focus-body:has(.lesson-result-screen) {
+  max-width: none;
+  height: calc(100vh - 68px);
+  padding: 0;
+  background: var(--bg);
+}
+.lesson-result-screen {
+  --result-ink: var(--ink);
+  --result-muted: var(--muted);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: none !important;
+  padding: clamp(18px, 3vh, 30px) clamp(24px, 5vw, 72px) 20px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 14px;
+  color: var(--ink);
+  background: var(--bg);
+  overflow: hidden;
+}
+.lesson-result-screen::before,
+.lesson-result-screen::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+.lesson-result-screen::before {
+  right: -70px;
+  top: -110px;
+  width: 360px;
+  height: 360px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 42% 58% 48% 52%;
+  box-shadow:
+    0 0 0 38px color-mix(in srgb, var(--accent) 4%, transparent),
+    0 0 0 76px color-mix(in srgb, var(--accent) 3%, transparent);
+  transform: rotate(18deg);
+  animation: result-orbit 12s ease-in-out infinite alternate;
+}
+.lesson-result-screen::after {
+  left: -85px;
+  bottom: -120px;
+  width: 330px;
+  height: 280px;
+  opacity: 0.3;
+  background:
+    linear-gradient(120deg, transparent 49%, var(--line) 50%, transparent 51%),
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 36px);
+  clip-path: polygon(8% 20%, 100% 0, 82% 100%, 0 82%);
+  transform: rotate(-8deg);
+}
+.lesson-result-screen > * {
+  position: relative;
+  z-index: 1;
+}
+@keyframes result-orbit {
+  to {
+    transform: rotate(28deg) translate3d(-14px, 14px, 0);
+  }
+}
+.result-heading {
+  text-align: center;
+  animation: result-reveal 0.45s ease both;
+}
+.result-heading h2 {
+  margin: 5px 0 0;
+  font-size: clamp(24px, 3vw, 38px);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.result-complete-label,
+.result-panel-label {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.result-performance-layout {
+  width: min(960px, 100%);
+  min-height: 0;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.82fr) minmax(420px, 1.35fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.result-score-panel,
+.result-metric-panel {
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--ink) 7%, transparent);
+  animation: result-reveal 0.55s cubic-bezier(0.2, 0.85, 0.3, 1) both;
+}
+.result-score-panel {
+  position: relative;
+  padding: clamp(20px, 3vh, 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+}
+.result-score-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent), #e6a928, transparent);
+  transform: scaleX(0);
+  animation: result-line-in 0.8s ease 0.25s forwards;
+}
+.lesson-score-lockup {
+  margin: clamp(13px, 2.2vh, 24px) 0 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lesson-score-lockup strong {
+  font-size: clamp(58px, 8vw, 92px);
+  font-weight: 790;
+  line-height: 0.82;
+  letter-spacing: -0.075em;
+  animation: score-land 0.65s cubic-bezier(0.15, 1.35, 0.3, 1) 0.1s both;
+}
+.lesson-score-lockup small {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.result-star-line {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.result-star-line svg {
+  width: clamp(25px, 3vw, 34px);
+  height: clamp(25px, 3vw, 34px);
+  color: var(--line);
+  opacity: 0;
+  transform: translateY(14px) rotate(-12deg) scale(0.35);
+  animation: professional-star-in 0.52s cubic-bezier(0.15, 1.45, 0.35, 1) forwards;
+}
+.result-star-line svg.earned {
+  color: #e7a927;
+  stroke: #f2bb4d;
+  filter: drop-shadow(0 5px 8px #e7a92738);
+}
+.score-panel-meta {
+  width: 100%;
+  max-width: 280px;
+  margin-top: clamp(16px, 2.5vh, 28px);
+  padding-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--line);
+}
+.score-panel-meta > span {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.score-panel-meta > span + span {
+  border-left: 1px solid var(--line);
+}
+.score-panel-meta small {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.score-panel-meta b {
+  font-size: 14px;
+}
+.score-status {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.score-status.new-score {
+  color: #c98b10;
+}
+.result-metric-panel {
+  padding: clamp(20px, 3vh, 32px);
+  animation-delay: 0.08s;
+}
+.metric-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: clamp(14px, 2vh, 22px);
+  border-bottom: 1px solid var(--line);
+}
+.metric-panel-heading h3 {
+  margin: 5px 0 0;
+  font-size: clamp(18px, 2vw, 24px);
+  letter-spacing: -0.025em;
+}
+.metric-panel-heading > svg {
+  color: var(--accent);
+}
+.result-metric-list {
+  display: grid;
+  gap: clamp(15px, 2.2vh, 25px);
+  padding-top: clamp(15px, 2.2vh, 24px);
+}
+.performance-meter {
+  --meter-color: var(--accent);
+}
+.speed-meter {
+  --meter-color: #d69a25;
+}
+.rhythm-meter {
+  --meter-color: #7b79c7;
+}
+.meter-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+.meter-copy > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.meter-copy > span svg {
+  color: var(--meter-color);
+}
+.meter-copy > strong {
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+.meter-copy > strong small {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+.meter-track {
+  position: relative;
+  height: 10px;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--soft);
+}
+.meter-track i {
+  position: absolute;
+  inset: 1px auto 1px 1px;
+  width: var(--meter-fill);
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--meter-color) 68%, var(--paper)), var(--meter-color));
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: meter-grow 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.35s forwards;
+}
+.meter-track em {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--ink);
+  opacity: 0;
+  animation: target-arrive 0.25s ease 1s forwards;
+}
+.performance-meter > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.lesson-result-summary {
+  min-height: 34px;
+  color: var(--muted);
+}
+.lesson-result-summary > span {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--muted);
+}
+.lesson-result-summary svg {
+  color: var(--accent);
+}
+.result-badge-pill {
+  color: var(--ink);
+}
+.lesson-result-actions {
+  margin-top: 0;
+}
+.lesson-result-actions .pill.secondary,
+.lesson-result-actions .pill.ghost {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--paper);
+}
+@keyframes result-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes result-line-in {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes score-land {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes professional-star-in {
+  70% {
+    opacity: 1;
+    transform: translateY(-3px) rotate(3deg) scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes meter-grow {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes target-arrive {
+  to {
+    opacity: 0.7;
+  }
+}
+
+@media (max-width: 760px) {
+  .lesson-result-screen {
+    height: auto;
+    min-height: calc(100vh - 64px);
+    padding: 22px 16px 34px;
+    grid-template-rows: auto;
+    gap: 16px;
+    overflow: visible;
+  }
+  .result-performance-layout {
+    grid-template-columns: 1fr;
+  }
+  .result-score-panel,
+  .result-metric-panel {
+    padding: 22px;
+  }
+  .lesson-score-lockup strong {
+    font-size: 70px;
+  }
+  .lesson-result-summary,
+  .lesson-result-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lesson-result-screen::before,
+  .result-heading,
+  .result-score-panel,
+  .result-metric-panel,
+  .lesson-score-lockup strong,
+  .result-star-line svg,
+  .result-score-panel::before,
+  .meter-track i,
+  .meter-track em {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Consistent page controls and a centered, one-screen lesson workspace. */
 .main > section:not(.lesson-focus) > .page-intro {
   min-height: 126px;
@@ -2679,7 +3088,8 @@ button {
   }
 }
 
-/* Lesson result inspired by the supplied circular performance dashboard. */
+/* Retained only as a low-priority fallback for older result markup. */
+@layer legacy-results {
 .lesson-focus-body:has(.lesson-result-screen) {
   max-width: none;
   height: calc(100vh - 76px);
@@ -2983,4 +3393,5 @@ button {
   .lesson-result-actions {
     flex-wrap: wrap;
   }
+}
 }
