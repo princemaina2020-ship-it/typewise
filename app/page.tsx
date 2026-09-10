@@ -429,6 +429,8 @@ function TypingSession({
   lessonMode = false,
   lessonTitle,
   lessonRecord,
+  targetWpm,
+  targetAccuracy,
   onNext,
   onPractice,
   completionBadges,
@@ -440,6 +442,8 @@ function TypingSession({
   lessonMode?: boolean;
   lessonTitle?: string;
   lessonRecord?: LessonRecord;
+  targetWpm?: number;
+  targetAccuracy?: number;
   onNext?: () => void;
   onPractice?: () => void;
   completionBadges?: (session: Session) => AchievementProgress[];
@@ -556,6 +560,8 @@ function TypingSession({
         lessonMode={lessonMode}
         lessonTitle={lessonTitle}
         lessonRecord={baselineRecord}
+        targetWpm={targetWpm}
+        targetAccuracy={targetAccuracy}
         badges={badges}
         onNext={onNext}
         onPractice={onPractice}
@@ -833,6 +839,8 @@ function Result({
   lessonMode = false,
   lessonTitle,
   lessonRecord,
+  targetWpm = 0,
+  targetAccuracy = 0,
   badges = [],
   onNext,
   onPractice,
@@ -843,6 +851,8 @@ function Result({
   lessonMode?: boolean;
   lessonTitle?: string;
   lessonRecord?: LessonRecord;
+  targetWpm?: number;
+  targetAccuracy?: number;
   badges?: AchievementProgress[];
   onNext?: () => void;
   onPractice?: () => void;
@@ -864,6 +874,110 @@ function Result({
       (a, k) => a + k.correct,
       0,
     );
+  if (lessonMode) {
+    const duration = `${Math.floor(session.duration / 60)}:${String(
+        session.duration % 60,
+      ).padStart(2, '0')}`,
+      speedScale = Math.max(targetWpm * 2, 40),
+      accuracyAngle = `${Math.min(session.accuracy, 100) * 3.6}deg`,
+      speedAngle = `${Math.min(session.wpm / speedScale, 1) * 360}deg`;
+    return (
+      <section className="result-page lesson-result-screen">
+        <span className="result-complete-label">Lesson complete</span>
+        <div
+          className="result-star-arc"
+          aria-label={`${stars} out of 6 stars earned`}
+        >
+          {[1, 2, 3, 4, 5, 6].map((star) => (
+            <Star
+              key={star}
+              className={star <= stars ? 'earned' : ''}
+              fill={star <= stars ? 'currentColor' : 'none'}
+              style={{ animationDelay: `${star * 130}ms` }}
+            />
+          ))}
+        </div>
+        <div className="result-dial-row">
+          <div className="dial-column">
+            <div
+              className="result-dial accuracy-dial"
+              style={{ '--gauge-angle': accuracyAngle } as React.CSSProperties}
+              aria-label={`${session.accuracy}% accuracy`}
+            >
+              <div>
+                <b>{session.accuracy}%</b>
+                <small>real accuracy</small>
+              </div>
+            </div>
+            <span className="dial-requirement">{targetAccuracy}% minimum</span>
+            <strong>accuracy</strong>
+          </div>
+          <div className="result-center-column">
+            <div className="duration-dial">
+              <div>
+                <b>{duration}</b>
+                <small>min : seconds</small>
+              </div>
+            </div>
+            <strong>duration</strong>
+            <div className="lesson-score-number">{score.toLocaleString()}</div>
+            <span className={isHighScore ? 'new-score' : ''}>
+              {isHighScore
+                ? 'NEW HIGH SCORE'
+                : `BEST ${Math.max(score, previousBest).toLocaleString()}`}
+            </span>
+          </div>
+          <div className="dial-column">
+            <div
+              className="result-dial speed-dial"
+              style={{ '--gauge-angle': speedAngle } as React.CSSProperties}
+              aria-label={`${session.wpm} words per minute`}
+            >
+              <div>
+                <b>{session.wpm}</b>
+                <small>wpm</small>
+              </div>
+            </div>
+            <span className="dial-requirement">Goal {targetWpm} wpm</span>
+            <strong>speed</strong>
+          </div>
+        </div>
+        <div className="lesson-result-summary">
+          <span>
+            <Zap size={15} /> <b>+{session.xp} XP</b>
+          </span>
+          <span>
+            <Activity size={15} />
+            {weak.length
+              ? `Focus next: ${weak.map((key) => key.key).join(', ')}`
+              : `${consistency}% consistency · no problem keys`}
+          </span>
+          {badges.length > 0 && (
+            <span className="result-badge-pill">
+              <Award size={15} />
+              <b>{badges[0].name}</b>
+              {badges.length > 1 && ` +${badges.length - 1}`}
+            </span>
+          )}
+        </div>
+        <div className="result-actions lesson-result-actions">
+          {onNext && (
+            <button className="pill primary" onClick={onNext}>
+              Next lesson <ChevronRight size={15} />
+            </button>
+          )}
+          <button className="pill secondary" onClick={retry}>
+            <RotateCcw size={15} /> Retake lesson
+          </button>
+          {onPractice && (
+            <button className="pill ghost" onClick={onPractice}>
+              Practice weak keys
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="result-page">
       <span className="eyebrow">
@@ -1365,8 +1479,15 @@ function Learn({
   setSaved: React.Dispatch<React.SetStateAction<Saved>>;
   go: (view: View) => void;
 }) {
+  const initialLesson = Math.min(
+    saved.completedLessons.length + 1,
+    lessons.length,
+  );
   const [q, setQ] = useState(''),
-    [active, setActive] = useState<number | null>(null);
+    [active, setActive] = useState<number | null>(null),
+    [selectedSection, setSelectedSection] = useState(
+      lessons[initialLesson - 1]?.section || lessons[0].section,
+    );
   const newBadgesFor = (lessonId: number, session: Session) => {
     const consistency = calculateMetrics(
         '',
@@ -1517,6 +1638,8 @@ function Learn({
             lessonMode
             lessonTitle={l.title}
             lessonRecord={saved.lessonRecords[l.id]}
+            targetWpm={l.wpm}
+            targetAccuracy={l.accuracy}
             completionBadges={(session) => newBadgesFor(l.id, session)}
             onNext={() => setActive(Math.min(lessons.length, l.id + 1))}
             onPractice={() => go('practice')}
@@ -1527,24 +1650,22 @@ function Learn({
       </section>
     );
   }
-  const list = lessons.filter((l) =>
-    (l.title + l.section + l.keys).toLowerCase().includes(q.toLowerCase()),
-  );
   const sectionNames = [...new Set(lessons.map((l) => l.section))],
-    currentLesson = Math.min(saved.completedLessons.length + 1, lessons.length),
-    level = levelFromXp(saved.xp),
-    streak = calculateStreak(saved.sessions.map((s) => s.date.slice(0, 10))),
-    recent = saved.lessonRecords[saved.completedLessons.at(-1) || 0];
+    currentLesson = initialLesson,
+    query = q.trim().toLowerCase(),
+    list = lessons
+      .filter((l) =>
+        query
+          ? (l.title + l.section + l.keys).toLowerCase().includes(query)
+          : l.section === selectedSection,
+      )
+      .slice(0, 15);
   return (
     <section>
-      <div className="page-intro">
+      <div className="page-intro learn-intro">
         <div>
           <span className="kicker">STRUCTURED COURSE</span>
           <h1>Learn one movement at a time.</h1>
-          <p>
-            100 short lessons, from first finger placement to professional
-            fluency.
-          </p>
         </div>
         <label className="search">
           <Search />
@@ -1567,23 +1688,17 @@ function Learn({
           </div>
           <nav>
             {sectionNames.map((section) => {
-              const first = lessons.find((l) => l.section === section)?.id || 1,
-                complete = lessons
-                  .filter((l) => l.section === section)
-                  .every((l) => saved.completedLessons.includes(l.id));
+              const complete = lessons
+                .filter((l) => l.section === section)
+                .every((l) => saved.completedLessons.includes(l.id));
               return (
                 <button
                   key={section}
-                  className={
-                    lessons[currentLesson - 1]?.section === section
-                      ? 'current'
-                      : ''
-                  }
-                  onClick={() =>
-                    document
-                      .getElementById(`lesson-${first}`)
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                  }
+                  className={selectedSection === section ? 'current' : ''}
+                  onClick={() => {
+                    setSelectedSection(section);
+                    setQ('');
+                  }}
                 >
                   <i>
                     {complete
@@ -1601,9 +1716,11 @@ function Learn({
         </aside>
         <div className="lesson-column">
           <div className="path-heading">
-            <span className="kicker">CURRENT PATH</span>
-            <h2>{lessons[currentLesson - 1]?.section}</h2>
-            <p>Build control first. Speed will follow.</p>
+            <span className="kicker">
+              {query ? 'SEARCH RESULTS' : 'LESSON SET'}
+            </span>
+            <h2>{query ? `“${q.trim()}”` : selectedSection}</h2>
+            <p>{list.length} lessons · select any available exercise.</p>
           </div>
           <div className="course-list">
             {list.map((l) => {
@@ -1620,23 +1737,17 @@ function Learn({
                     {done ? '✓' : l.id}
                   </span>
                   <span>
-                    <small>{l.section}</small>
+                    <small>Lesson {l.id}</small>
                     <b>{l.title}</b>
                     <i>{l.keys}</i>
                   </span>
-                  <span className="lesson-meta">
-                    <i>
-                      {l.wpm} WPM · {l.accuracy}%
-                    </i>
-                    <b>+{l.xp} XP</b>
-                    {saved.lessonStars[l.id] > 0 && (
-                      <strong className="course-stars">
-                        {'★'.repeat(saved.lessonStars[l.id])}
-                        {'☆'.repeat(6 - saved.lessonStars[l.id])}
-                        <small>{saved.lessonScores[l.id]} pts</small>
-                      </strong>
-                    )}
-                  </span>
+                  {saved.lessonStars[l.id] > 0 && (
+                    <strong className="course-stars">
+                      {'★'.repeat(saved.lessonStars[l.id])}
+                      {'☆'.repeat(6 - saved.lessonStars[l.id])}
+                      <small>{saved.lessonScores[l.id]} pts</small>
+                    </strong>
+                  )}
                   <em
                     className={`lesson-status ${done ? 'complete' : l.id === currentLesson ? 'current' : 'available'}`}
                   >
@@ -1654,48 +1765,6 @@ function Learn({
             })}
           </div>
         </div>
-        <aside className="learn-insights">
-          <div>
-            <span className="kicker">YOUR POSITION</span>
-            <b className="insight-number">{currentLesson}</b>
-            <small>Current lesson</small>
-          </div>
-          <dl>
-            <div>
-              <dt>Level</dt>
-              <dd>
-                {level.level} · {level.title}
-              </dd>
-            </div>
-            <div>
-              <dt>Current streak</dt>
-              <dd>{streak} days</dd>
-            </div>
-            <div>
-              <dt>Recent speed</dt>
-              <dd>{recent ? `${recent.lastWpm} WPM` : 'No lesson yet'}</dd>
-            </div>
-            <div>
-              <dt>Daily goal</dt>
-              <dd>{saved.dailyGoal} minutes</dd>
-            </div>
-          </dl>
-          <button
-            className="recommended"
-            onClick={() => go(saved.sessions.length ? 'practice' : 'test')}
-          >
-            <Brain />
-            <span>
-              <small>RECOMMENDED</small>
-              <b>
-                {weakFromSessions(saved.sessions).length
-                  ? 'Practice weak keys'
-                  : 'Build your baseline'}
-              </b>
-            </span>
-            <ChevronRight />
-          </button>
-        </aside>
       </div>
     </section>
   );
