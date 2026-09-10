@@ -2578,6 +2578,221 @@ button {
   }
 }
 
+/* Next-key cue: a quiet underline instead of recoloring the keycap. */
+.key-row kbd.next,
+.dark .key-row kbd.next {
+  color: var(--ink);
+  border-color: var(--key-border);
+  background: var(--key);
+  box-shadow: 0 2px 0 var(--key-border);
+}
+.key-row kbd.next::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 12px;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--accent);
+  transform: translateX(-50%);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 38%, transparent);
+  animation: next-key-dash 0.9s ease-in-out infinite alternate;
+}
+@keyframes next-key-dash {
+  to {
+    width: 17px;
+    opacity: 0.7;
+  }
+}
+
+/* The first result viewport stays concise; deeper diagnostics live below it. */
+.lesson-result-screen {
+  grid-template-rows: auto minmax(350px, auto) auto auto auto;
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.result-performance-layout {
+  min-height: 350px;
+}
+.result-deep-dive {
+  width: min(960px, 100%);
+  margin: 34px auto 72px;
+}
+.result-deep-heading {
+  max-width: 620px;
+  margin: 0 auto 24px;
+  text-align: center;
+}
+.result-deep-heading h3,
+.problem-key-heading h3 {
+  margin: 6px 0;
+  font-size: clamp(22px, 3vw, 32px);
+  letter-spacing: -0.04em;
+}
+.result-deep-heading p,
+.problem-key-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.result-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.result-stat-grid > div {
+  min-height: 112px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.result-stat-grid span,
+.result-stat-grid small {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.result-stat-grid b {
+  margin: 7px 0 3px;
+  font-size: 27px;
+  letter-spacing: -0.04em;
+}
+.problem-key-panel {
+  margin-top: 14px;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+}
+.problem-key-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.problem-key-heading p {
+  max-width: 310px;
+  text-align: right;
+}
+.problem-key-list {
+  display: grid;
+}
+.problem-key-row {
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.problem-key-row:last-child {
+  border-bottom: 0;
+}
+.problem-key-row > kbd {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 760;
+}
+.problem-key-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.problem-key-row > div b {
+  font-size: 12px;
+}
+.problem-key-row > div span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.problem-key-row dl {
+  min-width: 190px;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.problem-key-row dt {
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.problem-key-row dd {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 720;
+}
+.balanced-key-state {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--accent);
+}
+.balanced-key-state > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.balanced-key-state span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dark .result-stat-grid > div,
+.dark .problem-key-panel,
+.dark .problem-key-row {
+  border-color: transparent;
+}
+.dark .result-stat-grid > div,
+.dark .problem-key-panel {
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .lesson-result-screen {
+    overflow-y: visible;
+  }
+  .result-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .problem-key-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .problem-key-heading p {
+    text-align: left;
+  }
+  .problem-key-row {
+    grid-template-columns: 46px minmax(0, 1fr);
+    padding: 14px 0;
+  }
+  .problem-key-row dl {
+    grid-column: 2;
+    min-width: 0;
+  }
+}
+
 @media (max-width: 760px) {
   .main > section:not(.lesson-focus) > .page-intro {
     min-height: 0;

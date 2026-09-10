@@ -846,7 +846,6 @@ function VirtualKeyboard({ next }: { next: string }) {
                 : k === 'BACKSPACE'
                   ? 'delete'
                   : k.toLowerCase()}
-              <small>{k === n ? fingerForKey[k] : ''}</small>
             </kbd>
           ))}
         </div>
@@ -1082,6 +1081,106 @@ function Result({
             </button>
           )}
         </div>
+        <section className="result-deep-dive" aria-label="Detailed lesson statistics">
+          <div className="result-deep-heading">
+            <span className="result-panel-label">Detailed analysis</span>
+            <h3>The numbers behind this lesson</h3>
+            <p>
+              Every character attempt is included, even when a mistake was
+              corrected with Backspace.
+            </p>
+          </div>
+          <div className="result-stat-grid">
+            <div>
+              <span>Standard speed</span>
+              <b>{session.wpm}</b>
+              <small>net WPM</small>
+            </div>
+            <div>
+              <span>Raw speed</span>
+              <b>{session.rawWpm}</b>
+              <small>raw WPM</small>
+            </div>
+            <div>
+              <span>Accuracy</span>
+              <b>{session.accuracy}%</b>
+              <small>all attempts</small>
+            </div>
+            <div>
+              <span>Consistency</span>
+              <b>{consistency}%</b>
+              <small>interval rhythm</small>
+            </div>
+            <div>
+              <span>Correct</span>
+              <b>{correctCharacters}</b>
+              <small>keystrokes</small>
+            </div>
+            <div>
+              <span>Attempts</span>
+              <b>{characterCount}</b>
+              <small>characters</small>
+            </div>
+            <div>
+              <span>Errors</span>
+              <b>{session.errors}</b>
+              <small>including corrected</small>
+            </div>
+            <div>
+              <span>Duration</span>
+              <b>{duration}</b>
+              <small>minutes : seconds</small>
+            </div>
+          </div>
+          <article className="problem-key-panel">
+            <div className="problem-key-heading">
+              <div>
+                <span className="result-panel-label">Smart analyzer</span>
+                <h3>Problematic letters</h3>
+              </div>
+              <p>Ranked using error rate, response time, and sample confidence.</p>
+            </div>
+            {weak.length ? (
+              <div className="problem-key-list">
+                {weak.map((item) => (
+                  <div className="problem-key-row" key={item.key}>
+                    <kbd>{item.key === 'SPACE' ? 'space' : item.key}</kbd>
+                    <div>
+                      <b>
+                        {item.isAccuracyIssue && item.isSpeedIssue
+                          ? 'Accuracy and timing'
+                          : item.isAccuracyIssue
+                            ? 'Accuracy'
+                            : 'Timing'}
+                      </b>
+                      <span>{item.recommendation}</span>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Accuracy</dt>
+                        <dd>{item.accuracy}%</dd>
+                      </div>
+                      <div>
+                        <dt>Response</dt>
+                        <dd>{item.response ? `${item.response} ms` : '—'}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="balanced-key-state">
+                <Award size={22} />
+                <div>
+                  <b>No problematic keys detected</b>
+                  <span>
+                    This lesson had enough accuracy and an even response pattern.
+                  </span>
+                </div>
+              </div>
+            )}
+          </article>
+        </section>
       </section>
     );
   }
